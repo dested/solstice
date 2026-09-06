@@ -32,7 +32,9 @@ if (process.argv.includes('--bots-only')) {
   }
 }
 const botDef = await registerTaskDef(getProject('solstice-bots'), image);
-await client.ecs.send(new UpdateServiceCommand({cluster:'drydock',service:'drydock-solstice-bots',taskDefinition:botDef,desiredCount:1,forceNewDeployment:true}));
+const botService = await client.ecs.send(new DescribeServicesCommand({cluster:'drydock',services:['drydock-solstice-bots']}));
+const botReplicas = Math.max(1, botService.services[0]?.desiredCount || 0);
+await client.ecs.send(new UpdateServiceCommand({cluster:'drydock',service:'drydock-solstice-bots',taskDefinition:botDef,desiredCount:botReplicas,forceNewDeployment:true}));
 console.log('Bot worker is deploying the game release image.');
 await waitUntilServicesStable({client:client.ecs,maxWaitTime:900},{cluster:'drydock',services:['drydock-solstice','drydock-solstice-bots']});
 const final = await client.ecs.send(new DescribeServicesCommand({cluster:'drydock',services:['drydock-solstice','drydock-solstice-bots']}));

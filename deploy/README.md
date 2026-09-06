@@ -96,4 +96,3 @@ The same image runs the separate bot service by overriding its command to `bun b
 | `VITE_SERVER_URL`        | frontend build | Override only when hosting frontend separately         |
 
 No Postgres, schema migration, S3 bucket, or durable volume is needed for the current world lifecycle.
-

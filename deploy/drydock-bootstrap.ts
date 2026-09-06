@@ -22,6 +22,9 @@ const botSecret = oldGameEnv.BOT_SECRET || randomSecret(32);
 const redisSecret = oldRedisEnv.REDIS_PASSWORD || randomSecret(32);
 await putSsmEnv('solstice-redis', 'REDIS_PASSWORD', redisSecret);
 await ensureLogGroup('/drydock/solstice-redis');
+const existingRedis = await client.ecs.send(new DescribeServicesCommand({cluster:N.cluster,services:['drydock-solstice-redis']}));
+// Re-running app bootstrap must not restart Redis beneath occupied universes.
+if (!existingRedis.services?.some((service: {status: string}) => service.status !== 'INACTIVE')) {
 const redisDef = await client.ecs.send(new RegisterTaskDefinitionCommand({
   family: 'drydock-solstice-redis', requiresCompatibilities: ['EC2'], networkMode: 'bridge',
   executionRoleArn: `arn:aws:iam::${platform.accountId}:role/${N.taskExecutionRole}`,
@@ -33,6 +36,7 @@ const redisDef = await client.ecs.send(new RegisterTaskDefinitionCommand({
     logConfiguration: logConfig('/drydock/solstice-redis') }],
 }));
 await ensureService('drydock-solstice-redis', redisDef.taskDefinition.taskDefinitionArn, 1);
+}
 for (const name of ['solstice', 'solstice-bots']) {
   const bots = name.endsWith('-bots');
   const config = { ...defaultProjectConfig(name, ''), prisma: false, database: false,
