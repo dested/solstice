@@ -8,3 +8,6 @@ build: bun run typecheck
 start: bun bots/index.ts
 database: false
 prisma: false
+glibc: true
+domains: []
+# Set SOLSTICE_SERVICE=bots in SSM when using the shared root Dockerfile.

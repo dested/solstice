@@ -1,16 +1,51 @@
 # Drydock / ECS deployment
 
-No AWS resources have been changed. The repository is prepared for your existing Drydock workflow.
+Production: **https://solstice.dested.com** on the existing Drydock ARM ECS fleet.
+The deployment has three independent ECS services: `drydock-solstice` (game + web),
+`drydock-solstice-bots` (private bot worker), and `drydock-solstice-redis` (private
+password-protected matchmaking). Bot health has no public domain. Redis publishes
+only the box's internal port 16379; no security-group ingress was added.
 
-## Initial deployment
+## Deploy from this checkout
 
-1. Onboard the root repo with `drydock.yaml`: Bun SSR, port 2567, `bun run build`, `bun server/index.ts`. The game process serves both the browser assets and WebSockets. Drydock’s generated root Dockerfile can replace the equivalent example in this folder.
-2. Add `BOT_SECRET` through Drydock/SSM. Use a long random secret, shared only by the game and bot services. Add `ALLOWED_ORIGINS=https://your-game-domain` and `NODE_ENV=production`.
-3. Onboard the same repository as a **second service**, using `drydock-bots.yaml` for configuration. Start `bun bots/index.ts`, expose its health port 2568 internally, set `GAME_SERVER_URL=https://your-game-domain`, and set the same `BOT_SECRET`. It does not need a public domain.
-4. `/healthz` is available on both services. Bot health reports allocated bots, capacity, order count, and last successful world discovery.
+Drydock is configured for local uploads because this repository has no GitHub
+remote. The root `Dockerfile` builds one image; `SOLSTICE_SERVICE=bots` selects the
+bot process. The bot project's SSM environment sets that selector. Both services
+run the exact same immutable image tag, independently.
 
-Drydock owns its generated root Dockerfile, workflow, and manifest. This repository keeps additional examples in `deploy/` to avoid conflicting with that ownership. The bot config is an example to apply to the second project, not a second automatically provisioned service.
+```powershell
+# First provision only; safe to repeat, preserves existing generated secrets.
+bun deploy/drydock-bootstrap.ts
 
+# Build the local checkout in WSL for ARM64, push through Drydock, deploy both.
+bun deploy/drydock-release.ts
+```
+
+These commands use the sibling `../drydock` checkout and its configured AWS
+profile. Set `DRYDOCK_DIR` to override that path. They generate shared bot/Redis
+credentials directly into SSM SecureString parameters; secrets are never committed.
+Bootstrap registers local-only project records and DNS without creating or writing
+a GitHub repository. The release command confirms the running ECS definitions
+actually use the requested image, checks public HTTPS health, and fails on rollback.
+
+The portal remains available at `http://localhost:4400` with `bun server.ts` from
+Drydock. Its **Deploy locally** button can deploy the game alone; use the release
+script to update the paired bot service too. `--bots-only` updates bots to the
+currently deployed game's image without rebuilding.
+
+Current production is one game task and one bot worker. Redis is provisioned for
+shared matchmaking; increasing game replicas additionally requires the routing
+configuration below. Bot workers can already scale independently through ECS.
+Drydock's EC2 host, Caddy and Redis remain single-instance infrastructure.
+
+After a release, `bun deploy/live-smoke.ts` briefly joins a diagnostic player,
+checks actual WebSocket particle updates and separate-service AI population, and
+leaves the room. The initial live deployment passed with 26 binary frames and
+five bots; both application containers passed their image health checks.
+
+Drydock GitHub wiring normally overwrites the root Dockerfile and manifest. Do not
+wire this local-only project without preserving the service selector in the
+generated image. The `deploy/Dockerfile` remains the standalone/Compose example.
 ## Horizontal scaling
 
 **Game processes:** configure all instances with the same `REDIS_URL`. Each needs a unique publicly reachable `PUBLIC_ADDRESS`, such as `worker-a.game.example.com` or `game.example.com/worker-a`. The initial matchmaking request can hit any instance; the returned room reservation tells the SDK which exact instance owns the world.
@@ -61,3 +96,4 @@ The same image runs the separate bot service by overriding its command to `bun b
 | `VITE_SERVER_URL`        | frontend build | Override only when hosting frontend separately         |
 
 No Postgres, schema migration, S3 bucket, or durable volume is needed for the current world lifecycle.
+

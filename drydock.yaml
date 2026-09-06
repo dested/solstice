@@ -7,3 +7,7 @@ build: bun run build
 start: bun server/index.ts
 database: false
 prisma: false
+glibc: true
+domains:
+  - solstice.dested.com
+dnsZone: dested.com
