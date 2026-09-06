@@ -1,7 +1,7 @@
 # Second playtest fixes
 
 - **Date:** 2026-09-06
-- **Status:** active
+- **Status:** done
 - **Type:** analysis
 - **What:** Resolve Handback 2d444d85-856e-4eec-a7fa-592575f74c4d, add reinforcement healing, commit/push and release.
 
@@ -34,6 +34,9 @@ The highlighted selection at 0:32–0:38 is the technical server/bot/demo paragr
 - 64-client network regression passes; extra client creates a second room. Two independent clients receive the same moving-unit coordinates in at least three snapshots.
 - Desktop/390×844 touch regression passes: selection/capture, reload reconnect, tip dismissal persistence, overview return, portrait whole-world fit, real pinch and box selection, audio/effects switches, no JavaScript/WebGL errors.
 - Existing bx onboarding flow passes 27 steps. Exploratory bx agent did not complete: `tier=sonnet (escalated) ended=wall turns=57 wall=92.3s tokens=155/2563 (167936 cached) cost=$0.0597 est=$0.10`. Deterministic browser checks provide the proof; this run is not claimed as a pass.
-- New private GitHub remote: dested/solstice. Release and Handback proof posting pending.
+- Dedicated round-two bx replay passes 33 steps, including tip restoration from Settings. Use `bx --profile solstice-round2 --headless run flows/handback-round2.flow.ts` to isolate it from other browser work. Initial default-profile attempts hit camera timeouts and a tab replacement; the isolated run completed in 9.5 seconds.
+- Private GitHub remote: https://github.com/dested/solstice; implementation e70e221 pushed to master.
+- Drydock release: image `local-e70e221`, digest `sha256:c2ee7326c41926ada824b319bfcdf6be8dd1d76c5fd0fc8dd9e58b18975995ef`. Game revision 4 and bot revision 4 both COMPLETED, one running task each. Live HTTPS and Colyseus smoke passed (21 binary frames, 274 stars, two joined bots). Diagnostic player left; zero worlds remained.
+- Posted the full report, answers, commit link and four uploaded proof screenshots to Handback for human review. The walkthrough is in review, not marked resolved.
 
 Real phone hardware, subjective speaker playback and production task-density load testing remain outside the completed checks. Current ECS deployment uses one game task and one host; independent bot tasks and Redis-backed matchmaking exist, but automatic per-worker ingress routing and durable world migration do not.
