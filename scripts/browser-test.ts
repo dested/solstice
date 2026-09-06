@@ -119,10 +119,27 @@ try {
     await page.evaluate(() => window.__solsticeDebug.world.stars.length),
     "all live stars rendered after leaving the ten-star menu",
   );
+  const localView = await page.evaluate(() => window.__solsticeDebug.view);
+  await page.getByRole("button", { name: "Dismiss playing tips" }).click();
+  assert.equal(await page.locator(".objective-panel").count(), 0);
   await page
     .getByRole("button", { name: "View whole galaxy", exact: true })
     .click();
   await page.waitForTimeout(700);
+  await page.screenshot({ path: "artifacts/round2-galaxy.png" });
+  await page
+    .getByRole("button", { name: "Return to previous view", exact: true })
+    .click();
+  await page.waitForFunction((v) => {
+    const current = window.__solsticeDebug.view;
+    return (
+      Math.abs(current.height - v.height) < 5 &&
+      Math.hypot(current.x - v.x, current.y - v.y) < 5
+    );
+  }, localView);
+  const restored = await page.evaluate(() => window.__solsticeDebug.view);
+  assert.ok(Math.abs(restored.height - localView.height) < 5);
+  assert.ok(Math.hypot(restored.x - localView.x, restored.y - localView.y) < 5);
   await page.getByRole("button", { name: "Home (F)", exact: true }).click();
   await page.waitForTimeout(800);
   const initial = await page.evaluate(
@@ -132,6 +149,7 @@ try {
       )!.stars,
   );
   await page.getByRole("button", { name: "Select all" }).click();
+  await page.screenshot({ path: "artifacts/round2-selected.png" });
   assert.ok(
     (await page.evaluate(() => window.__solsticeDebug.selected.length)) >= 100,
   );
@@ -165,12 +183,20 @@ try {
     .getByRole("button", { name: "Join the universe", exact: true })
     .click();
   await page.waitForFunction(() => window.__solsticeDebug.player > 0);
+  assert.equal(
+    await page.locator(".objective-panel").count(),
+    0,
+    "dismissal persists",
+  );
   assert.equal(await page.evaluate(() => window.__solsticeDebug.player), oldId);
   await page
     .getByRole("button", { name: "How to play", exact: true })
     .first()
     .click();
   assert.equal(await page.locator("dialog").count(), 1);
+  assert.equal(await page.locator(".server-note").count(), 0);
+  await page.setViewportSize({ width: 1440, height: 810 });
+  await page.screenshot({ path: "artifacts/round2-guide.png" });
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("switch", { name: "Soundscape" }).click();
@@ -202,6 +228,19 @@ try {
     false,
   );
   await join(phone, "Touch QA");
+  await phone.getByRole("button", { name: "Dismiss playing tips" }).click();
+  await phone
+    .getByRole("button", { name: "View whole galaxy", exact: true })
+    .click();
+  await phone.waitForTimeout(800);
+  assert.ok(
+    (await phone.evaluate(() => window.__solsticeDebug.view.width)) > 13600,
+    "whole galaxy fits phone width",
+  );
+  await phone
+    .getByRole("button", { name: "Return to previous view", exact: true })
+    .click();
+  await phone.waitForTimeout(800);
   const star = await screenStar(phone, true);
   await phone.touchscreen.tap(star.x, star.y);
   assert.ok(

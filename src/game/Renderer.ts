@@ -39,6 +39,7 @@ interface Callbacks {
   hover: (star?: Star) => void;
   fps: (fps: number) => void;
   feedback: (message: string) => void;
+  overview: (active: boolean) => void;
 }
 export class GalaxyRenderer {
   readonly audio = new Soundscape();
@@ -54,6 +55,9 @@ export class GalaxyRenderer {
   player = 0;
   playing = false;
   touchSelect = false;
+  showTips = true;
+  private localView?: { x: number; y: number; height: number };
+  private impactTimes = new Map<string, number>();
   reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   minimap?: HTMLCanvasElement;
   onDemoFrame?: (dt: number) => void;
@@ -341,9 +345,28 @@ export class GalaxyRenderer {
     if (s) this.focus(s.x, s.y, this.width < 700 ? 1700 : 1550);
   }
   focus(x: number, y: number, height?: number) {
+    height ??= this.localView?.height;
+    this.localView = undefined;
+    this.callbacks.overview(false);
     this.targetX = clamp(x, 0, WORLD_SIZE);
     this.targetY = clamp(y, 0, WORLD_SIZE);
     if (height) this.targetHeight = height;
+  }
+  toggleOverview() {
+    if (this.localView) {
+      const saved = this.localView;
+      this.focus(saved.x, saved.y, saved.height);
+    } else {
+      this.localView = {
+        x: this.targetX,
+        y: this.targetY,
+        height: this.targetHeight,
+      };
+      this.targetX = this.targetY = WORLD_SIZE / 2;
+      this.targetHeight =
+        WORLD_SIZE * 1.1 * Math.max(1, this.height / this.width);
+      this.callbacks.overview(true);
+    }
   }
   home() {
     const p = this.world.players.find((p) => p.id === this.player);
@@ -360,10 +383,12 @@ export class GalaxyRenderer {
     }
   }
   zoom(factor: number) {
+    this.localView = undefined;
+    this.callbacks.overview(false);
     this.targetHeight = clamp(
       this.targetHeight * factor,
       430,
-      WORLD_SIZE * 1.15,
+      WORLD_SIZE * 1.15 * Math.max(1, this.height / this.width),
     );
   }
   setQuality(high: boolean) {
@@ -389,14 +414,30 @@ export class GalaxyRenderer {
   }
   event(events: WorldEvent[]) {
     const now = performance.now();
+    if (this.impactTimes.size > 1024)
+      for (const [key, time] of this.impactTimes) {
+        if (now - time > 5000) this.impactTimes.delete(key);
+      }
     for (const e of events) {
+      if (e.kind === "impact" || e.kind === "absorb") {
+        const key = `${e.starId}:${e.owner}:${e.kind}`;
+        if (now - (this.impactTimes.get(key) ?? -Infinity) < 90) continue;
+        this.impactTimes.set(key, now);
+      }
       this.ripples.push({ ...e, born: now });
       const p = this.toScreen(e);
       const visible =
         p.x >= 0 && p.y >= 0 && p.x < this.width && p.y < this.height;
       if (visible && e.kind === "clash") this.audio.clash();
-      else if (e.owner === this.player && e.kind !== "clash")
-        this.audio.capture();
+      else if (visible && e.kind === "impact") this.audio.impact();
+      else if (visible && e.kind === "absorb") this.audio.absorb();
+      else if (
+        e.kind === "capture" &&
+        (visible || e.owner === this.player || e.other === this.player)
+      )
+        this.audio.capture(e.other === this.player);
+      else if (e.kind === "upgrade" && (visible || e.owner === this.player))
+        this.audio.upgrade();
     }
     if (this.ripples.length > 400)
       this.ripples.splice(0, this.ripples.length - 400);
@@ -483,11 +524,14 @@ export class GalaxyRenderer {
       c: THREE.Color,
       intensity: number,
       size: number,
+      selected = false,
     ) => {
       if (count >= 30000) return;
       this.positions.set([x, -y, 5], count * 3);
       this.colors.set(
-        [c.r * intensity, c.g * intensity, c.b * intensity],
+        [c.r, c.g, c.b].map(
+          (v) => (selected ? v * 0.35 + 0.65 : v) * intensity,
+        ),
         count * 3,
       );
       this.sizes[count++] = size;
@@ -503,7 +547,7 @@ export class GalaxyRenderer {
         continue;
       const c = this.color(u.owner),
         selected = this.selected.has(u.id);
-      add(x, y, c, selected ? 1.05 : 0.78, selected ? 6 : 4.5);
+      add(x, y, c, selected ? 1.2 : 0.95, selected ? 11 : 6.5, selected);
       if (u.moving && !this.reducedMotion) {
         const dx = u.x - u.px,
           dy = u.y - u.py;
@@ -513,22 +557,22 @@ export class GalaxyRenderer {
     }
     for (const e of this.ripples) {
       const age = (now - e.born) / 1000,
-        capture = e.kind !== "clash";
-      if (capture) continue; // Commands and upgrades must not resemble an extra swarm.
-      const life = 0.3;
+        capture = e.kind === "capture";
+      if (e.kind === "order" || e.kind === "upgrade") continue;
+      const life = capture ? 0.75 : 0.3;
       if (age > life) continue;
       const color = this.color(e.owner),
-        n = 3;
+        n = capture ? 24 : e.kind === "absorb" ? 3 : 6;
       for (let i = 0; i < n; i++) {
         const a = i * 2.399963 + e.x;
-        const speed = 16 + (i % 9) * (capture ? 17 : 10),
+        const speed = 24 + (i % 9) * (capture ? 17 : 10),
           r = age * speed;
         add(
           e.x + Math.cos(a) * r,
           e.y + Math.sin(a) * r,
           color,
-          (1 - age / life) * 0.6,
-          3,
+          (1 - age / life) * 1.15,
+          capture ? 7 : 5,
         );
       }
     }
@@ -542,9 +586,35 @@ export class GalaxyRenderer {
     const c = this.ctx;
     c.clearRect(0, 0, this.width, this.height);
     const scale = this.height / this.viewHeight;
+    if (this.selected.size && this.viewHeight < 4000) {
+      const t = clamp((now - this.snapshotTime) / 100, 0, 1);
+      c.fillStyle = "#fff6df";
+      c.lineWidth = 1.1;
+      c.beginPath();
+      for (const id of this.selected) {
+        const u = this.units.get(id);
+        if (!u) continue;
+        const p = this.toScreen({
+          x: u.px + (u.x - u.px) * t,
+          y: u.py + (u.y - u.py) * t,
+        });
+        c.moveTo(p.x + 2, p.y);
+        c.arc(p.x, p.y, 2, 0, Math.PI * 2);
+      }
+      c.fill();
+    }
     for (const s of this.world.stars) {
       const p = this.toScreen(s),
         r = radius(s) * scale;
+      if (scale < 0.15) {
+        // Keep playable stars legible among decorative background points at galaxy scale.
+        c.fillStyle = s.owner ? factionColor(s.owner) : "#63859c";
+        c.globalAlpha = s.owner ? 0.9 : 0.6;
+        c.beginPath();
+        c.arc(p.x, p.y, s.owner ? 3 : 2, 0, Math.PI * 2);
+        c.fill();
+        c.globalAlpha = 1;
+      }
       if (
         p.x < -100 ||
         p.y < -100 ||
@@ -602,7 +672,8 @@ export class GalaxyRenderer {
           labelY < this.height - 105 &&
           !(
             this.width >= 600 &&
-            ((p.y < 430 && p.x < 285) || (p.y < 530 && p.x > this.width - 300))
+            ((this.showTips && p.y < 430 && p.x < 285) ||
+              (p.y < 530 && p.x > this.width - 300))
           )
         : this.width < 600
           ? labelY < this.height * 0.35
@@ -639,15 +710,24 @@ export class GalaxyRenderer {
     for (const e of this.ripples) {
       const age = (now - e.born) / 1000;
       if (e.kind === "clash" || age > 0.8) continue;
+      const arrival = e.kind === "impact" || e.kind === "absorb";
+      if (arrival && age > 0.3) continue;
       const p = this.toScreen(e);
       c.strokeStyle = factionColor(e.owner);
-      c.globalAlpha = Math.max(0, (1 - age / 0.8) * 0.5);
-      c.lineWidth = 1.5;
+      c.globalAlpha = Math.max(0, (1 - age / (arrival ? 0.3 : 0.8)) * 0.8);
+      c.lineWidth = e.kind === "capture" ? 2.5 : 1.5;
       c.beginPath();
       c.arc(
         p.x,
         p.y,
-        (e.kind === "order" ? 10 + age * 18 : 38 + age * 22) * scale,
+        Math.max(
+          2,
+          (arrival
+            ? 3 + age * 28
+            : e.kind === "order"
+              ? 10 + age * 18
+              : 38 + age * (e.kind === "capture" ? 100 : 22)) * scale,
+        ),
         0,
         Math.PI * 2,
       );
@@ -673,9 +753,9 @@ export class GalaxyRenderer {
     if (this.drag?.moved && !this.drag.pan && !this.gesture) {
       const a = this.drag.start,
         b = this.cursor;
-      c.fillStyle = "rgba(255,209,151,.045)";
-      c.strokeStyle = "rgba(255,209,151,.7)";
-      c.lineWidth = 1;
+      c.fillStyle = "rgba(255,209,151,.12)";
+      c.strokeStyle = "#fff0d5";
+      c.lineWidth = 2;
       c.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
       c.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
     }
@@ -779,9 +859,11 @@ export class GalaxyRenderer {
     this.callbacks.feedback(
       star
         ? star.owner === this.player
-          ? star.level < star.maxLevel
-            ? `Upgrade ordered · ${count} units sent · ${upgradeCost(star) - star.upgrade} needed. These units are spent on production.`
-            : `Reinforcing your star · ${count} units. Max level ${star.maxLevel}; units stay to defend.`
+          ? star.hp < star.maxHp
+            ? `Repair ordered · ${count} units sent · ${Math.ceil(star.maxHp - star.hp)} needed to heal. Remaining units upgrade or defend.`
+            : star.level < star.maxLevel
+              ? `Upgrade ordered · ${count} units sent · ${upgradeCost(star) - star.upgrade} needed. These units are spent on production.`
+              : `Reinforcing your star · ${count} units. Max level ${star.maxLevel}; units stay to defend.`
           : star.shield > this.world.time
             ? `Attack blocked · ${owner?.name ?? "Opponent"} is protected for ${Math.ceil(star.shield - this.world.time)}s.`
             : `Attacking ${owner?.name ?? "neutral star"} · ${count} units sent · ${Math.ceil(star.hp)} star defense, plus nearby enemy units.`

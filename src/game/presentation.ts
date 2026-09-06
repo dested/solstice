@@ -33,9 +33,11 @@ export function starDetails(
   return {
     title: `Your star · Level ${star.level} / ${star.maxLevel}`,
     detail:
-      star.level >= star.maxLevel
-        ? `Max level · This star supports ${star.maxLevel} level${star.maxLevel === 1 ? "" : "s"}. Reinforcements stay to defend.`
-        : `Upgrade: ${star.upgrade} / ${upgradeCost(star)} units · Send ${upgradeCost(star) - star.upgrade} more to reach +${((star.level + 1) * 1.7).toFixed(1)}/s. Units are spent on the upgrade.`,
+      star.hp < star.maxHp
+        ? `Repair: ${Math.ceil(star.hp)} / ${star.maxHp} defense · Send ${Math.ceil(star.maxHp - star.hp)} units to heal. Each unit restores 1 defense; repairs happen before upgrades.`
+        : star.level >= star.maxLevel
+          ? `Max level · This star supports ${star.maxLevel} level${star.maxLevel === 1 ? "" : "s"}. Reinforcements stay to defend.`
+          : `Upgrade: ${star.upgrade} / ${upgradeCost(star)} units · Send ${upgradeCost(star) - star.upgrade} more to reach +${((star.level + 1) * 1.7).toFixed(1)}/s. Units are spent on the upgrade.`,
   };
 }
 

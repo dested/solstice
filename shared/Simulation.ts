@@ -67,30 +67,48 @@ export class Simulation {
   private abandoned = new Map<number, number>();
   constructor(seed = Date.now()) {
     this.rng = seed >>> 0;
-    for (let row = 0; row < 19; row++)
-      for (let col = 0; col < 19; col++) {
-        const x = 600 + col * 688 + (this.random() - 0.5) * 260;
-        const y = 600 + row * 688 + (this.random() - 0.5) * 260;
-        if (Math.hypot(x - WORLD_SIZE / 2, y - WORLD_SIZE / 2) > 6400) continue;
-        const id = this.stars.length;
-        const maxLevel = this.random() < 0.2 ? 3 : this.random() < 0.55 ? 2 : 1;
-        this.stars.push({
-          id,
-          name:
-            NAMES[id % NAMES.length] +
-            (id >= NAMES.length ? ` ${Math.floor(id / NAMES.length) + 1}` : ""),
-          x,
-          y,
-          owner: 0,
-          level: 1,
-          maxLevel,
-          hp: 28 + (maxLevel - 1) * 8,
-          maxHp: 45,
-          upgrade: 0,
-          production: this.random(),
-          shield: 0,
-        });
-      }
+    const clusters = Array.from({ length: 7 }, () => {
+      const angle = this.random() * Math.PI * 2;
+      const r = Math.sqrt(this.random()) * 4900;
+      return {
+        x: WORLD_SIZE / 2 + Math.cos(angle) * r,
+        y: WORLD_SIZE / 2 + Math.sin(angle) * r,
+      };
+    });
+    // Rejection sampling gives irregular pockets and open lanes without rows or columns.
+    for (
+      let attempt = 0;
+      this.stars.length < 274 && attempt < 100000;
+      attempt++
+    ) {
+      const angle = this.random() * Math.PI * 2;
+      const r = Math.sqrt(this.random()) * 6400;
+      const x = WORLD_SIZE / 2 + Math.cos(angle) * r;
+      const y = WORLD_SIZE / 2 + Math.sin(angle) * r;
+      const density = Math.max(
+        ...clusters.map((c) => Math.exp(-distanceSq(c, { x, y }) / 1800 ** 2)),
+      );
+      if (attempt < 40000 && this.random() > 0.22 + density * 0.78) continue;
+      if (this.stars.some((s) => distanceSq(s, { x, y }) < 430 ** 2)) continue;
+      const id = this.stars.length;
+      const maxLevel = this.random() < 0.2 ? 3 : this.random() < 0.55 ? 2 : 1;
+      this.stars.push({
+        id,
+        name:
+          NAMES[id % NAMES.length] +
+          (id >= NAMES.length ? ` ${Math.floor(id / NAMES.length) + 1}` : ""),
+        x,
+        y,
+        owner: 0,
+        level: 1,
+        maxLevel,
+        hp: 28 + (maxLevel - 1) * 8,
+        maxHp: 45,
+        upgrade: 0,
+        production: this.random(),
+        shield: 0,
+      });
+    }
   }
   random() {
     let t = (this.rng += 0x6d2b79f5);
@@ -130,6 +148,10 @@ export class Simulation {
   }
   spawn(p: Player) {
     const hostile = this.stars.filter((s) => s.owner && s.owner !== p.id);
+    const humanStars = hostile.filter((s) => {
+      const owner = this.players.get(s.owner);
+      return owner?.connected && !owner.bot;
+    });
     let best: Star | undefined;
     let score = -Infinity;
     for (const s of this.stars) {
@@ -140,8 +162,16 @@ export class Simulation {
       let danger = 0;
       for (const u of this.units.values())
         if (u.owner !== p.id && distanceSq(s, u) < 300 ** 2) danger++;
+      const nearHuman = !p.bot && humanStars.length > 0;
+      const humanDistance = nearHuman
+        ? Math.min(...humanStars.map((h) => Math.sqrt(distanceSq(s, h))))
+        : 0;
+      const safeDistance = nearHuman ? 850 : 1300;
       const value =
-        (nearest < 1300 ? nearest - 3400 : -Math.abs(nearest - 2200) * 0.25) -
+        (nearest < safeDistance
+          ? nearest - 3400
+          : -Math.abs(nearest - (nearHuman ? 1250 : 2200)) * 0.25) -
+        (nearHuman ? Math.abs(humanDistance - 1250) * 2 : 0) -
         danger * 25 +
         this.random() * 120;
       if (value > score) {
@@ -258,6 +288,7 @@ export class Simulation {
   step(dt: number) {
     this.time += dt;
     this.events = [];
+    const impacts = new Map<string, WorldEvent>();
     for (const s of this.stars) {
       const p = this.players.get(s.owner);
       if (!p || !p.connected) continue;
@@ -286,6 +317,14 @@ export class Simulation {
               continue;
             }
             s.hp -= 1;
+            impacts.set(`impact:${s.id}:${u.owner}`, {
+              kind: "impact",
+              x: u.x,
+              y: u.y,
+              owner: u.owner,
+              other: s.owner,
+              starId: s.id,
+            });
             this.removeUnit(u);
             if (s.hp <= 0) {
               const old = s.owner;
@@ -306,8 +345,26 @@ export class Simulation {
                 starId: s.id,
               });
             }
+          } else if (s && s.hp < s.maxHp) {
+            // Reinforcements repair damage before paying toward the next production level.
+            s.hp = Math.min(s.maxHp, s.hp + 1);
+            impacts.set(`absorb:${s.id}:${u.owner}`, {
+              kind: "absorb",
+              x: u.x,
+              y: u.y,
+              owner: u.owner,
+              starId: s.id,
+            });
+            this.removeUnit(u);
           } else if (s && s.level < s.maxLevel) {
             s.upgrade++;
+            impacts.set(`absorb:${s.id}:${u.owner}`, {
+              kind: "absorb",
+              x: u.x,
+              y: u.y,
+              owner: u.owner,
+              starId: s.id,
+            });
             this.removeUnit(u);
             if (s.upgrade >= upgradeCost(s)) {
               s.level++;
@@ -326,6 +383,14 @@ export class Simulation {
             }
           } else {
             u.moving = false;
+            if (s)
+              impacts.set(`absorb:${s.id}:${u.owner}`, {
+                kind: "absorb",
+                x: u.x,
+                y: u.y,
+                owner: u.owner,
+                starId: s.id,
+              });
             if (!s) {
               u.tx = u.x;
               u.ty = u.y;
@@ -350,6 +415,7 @@ export class Simulation {
         u.y += (ty - u.y) * Math.min(1, dt * 1.8);
       }
     }
+    this.events.push(...impacts.values());
     this.collide();
     this.botClock += dt;
     if (this.botClock >= 2) {

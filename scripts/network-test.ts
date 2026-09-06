@@ -91,10 +91,23 @@ try {
   const units = unitLists.get(first.sessionId)!.filter((u) => u.owner === id);
   assert.ok(units.length >= 100);
   const u = units[0];
+  const observer = rooms[1];
+  observer.send("view", { x: u.x, y: u.y, width: 2000, height: 2000 });
+  const samples = [new Set<string>(), new Set<string>()];
+  [first, observer].forEach((room, i) =>
+    room.onMessage("units", (v: Uint8Array) => {
+      const observed = decodeUnits(v).find((item) => item.id === u.id);
+      if (observed?.moving) samples[i].add(`${observed.x}:${observed.y}`);
+    }),
+  );
   first.send("move", { ids: [u.id], x: u.x + 240, y: u.y });
   await delay(600);
   const moved = unitLists.get(first.sessionId)!.find((x) => x.id === u.id)!;
   assert.ok(moved.x > u.x + 15, "server applies movement");
+  assert.ok(
+    [...samples[0]].filter((position) => samples[1].has(position)).length >= 3,
+    "two independent clients receive identical positions for the same moving unit",
+  );
   const other = rooms[1];
   const otherId = identities.get(other.sessionId)!;
   const victim = unitLists

@@ -28,12 +28,14 @@ For a production build, `bun run build`, then `bun start`. The game process serv
 | Home star            | F / Home button                               | Home button                        |
 | Navigate galaxy      | Click minimap                               | Tap minimap                        |
 
-Sending particles to a friendly star with empty rings contributes to its evolution. The first ring costs 60 particles, the second 120. Each star level produces 1.7 particles/second. Enemies collide one for one. Stars have separate capture resistance; remaining particles can upgrade the newly captured star.
+Sending particles to a damaged friendly star repairs it first: one particle restores one defense point. Once fully healed, reinforcements contribute to evolution (60 particles for level 2, then 120 for level 3). At the star’s maximum level, extra particles stay to defend. Each star level produces 1.7 particles/second. Enemies collide one for one. Stars have separate capture resistance; remaining particles can upgrade a newly captured star.
+
+The minimap’s expand button toggles between the whole galaxy and your previous view. Close the playing tips with ×; restore them in Settings. Sound is opt-in, with separate collision, star-hit, arrival, upgrade, capture, and loss cues.
 
 ## World rules
 
 - Up to **64 connected players total**, including bots. Join fills an existing universe before creating another.
-- Procedural 13,600 × 13,600 worlds contain roughly 270 stars with twice the original spacing. A new faction gets 100 particles and one star, selected away from immediate threats but near the action.
+- Procedural 13,600 × 13,600 worlds contain 274 irregularly distributed stars, with at least 430 units between centers. A new faction gets 100 particles and one star. Human arrivals favor nearby human territory while avoiding immediate threats.
 - A 35-second starting sanctuary protects the home star and nearby particles. Sending units out ends it early.
 - Elimination requires losing every star and particle. Respawn grants a new starting position in the same universe.
 - The world remains active while humans are present. A network drop reserves the empire for 30 seconds; a reload can reconnect using the tab’s session token.

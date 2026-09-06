@@ -232,7 +232,18 @@ export class UniverseRoom extends Room {
           (Math.abs(e.x - seat.view.x) < seat.view.width / 2 + 100 &&
             Math.abs(e.y - seat.view.y) < seat.view.height / 2 + 100),
       );
-      if (events.length) client.send("events", events.slice(-160));
+      if (events.length) {
+        const milestones = events.filter(
+          (e) => e.kind === "capture" || e.kind === "upgrade",
+        );
+        const effects = events.filter(
+          (e) => e.kind !== "capture" && e.kind !== "upgrade",
+        );
+        client.send("events", [
+          ...effects.slice(-Math.max(1, 160 - milestones.length)),
+          ...milestones,
+        ]);
+      }
     }
     this.pending = [];
   }

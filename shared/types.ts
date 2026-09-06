@@ -62,7 +62,7 @@ export interface Unit {
   phase: number;
 }
 export interface WorldEvent {
-  kind: "clash" | "capture" | "upgrade" | "order";
+  kind: "clash" | "capture" | "upgrade" | "order" | "impact" | "absorb";
   x: number;
   y: number;
   owner: number;

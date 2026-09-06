@@ -45,10 +45,25 @@ export function planOrders(
         });
       }
     }
+    const available = local.filter((u) => !used.has(u.id));
+    if (home.hp < home.maxHp * 0.65 && available.length > 30) {
+      const repair = available.slice(
+        0,
+        Math.min(Math.ceil(home.maxHp - home.hp), available.length - 30),
+      );
+      repair.forEach((u) => used.add(u.id));
+      orders.push({
+        ids: repair.map((u) => u.id),
+        x: home.x,
+        y: home.y,
+        star: home.id,
+      });
+    }
     const idle = local.filter((u) => !used.has(u.id));
-    if (idle.length < 45 || attackers > 10) continue;
+    if (idle.length < 45 || attackers > Math.max(10, idle.length * 0.3))
+      continue;
     const candidates = targets
-      .filter((s) => distanceSq(s, home) < 2100 ** 2)
+      .filter((s) => distanceSq(s, home) < 2600 ** 2)
       .map((s) => ({
         star: s,
         defenders: enemies.filter((u) => distanceSq(u, s) < 155 ** 2).length,
@@ -57,18 +72,30 @@ export function planOrders(
         (a, b) =>
           distanceSq(a.star, home) +
           a.defenders * 1600 +
-          (a.star.owner ? 50000 : 0) -
+          (a.star.owner ? -120000 : 0) -
           distanceSq(b.star, home) -
           b.defenders * 1600 -
-          (b.star.owner ? 50000 : 0),
+          (b.star.owner ? -120000 : 0),
       );
     const target = candidates.find(
-      (t) => idle.length > t.star.hp + t.defenders + 18,
+      (t) =>
+        Math.floor(idle.length * (t.star.owner ? 0.9 : 0.8)) >
+        t.star.hp +
+          t.defenders +
+          18 +
+          (t.star.owner
+            ? Math.min(
+                65,
+                (Math.sqrt(distanceSq(t.star, home)) / 100) *
+                  t.star.level *
+                  1.7,
+              )
+            : 0),
     );
     const evolve =
       home.level < home.maxLevel &&
-      idle.length > upgradeCost(home) - home.upgrade + 45 &&
-      (!target || target.star.owner !== 0);
+      idle.length > upgradeCost(home) - home.upgrade + 65 &&
+      !target;
     if (evolve) {
       const chosen = idle.slice(0, upgradeCost(home) - home.upgrade);
       chosen.forEach((u) => used.add(u.id));
@@ -79,10 +106,8 @@ export function planOrders(
         star: home.id,
       });
     } else if (target) {
-      const count = Math.min(
-        Math.floor(idle.length * 0.85),
-        Math.ceil(target.star.hp + target.defenders + 30),
-      );
+      // Commit a swarm. Tiny packets feed the defender instead of taking territory.
+      const count = Math.floor(idle.length * (target.star.owner ? 0.9 : 0.8));
       const chosen = idle.slice(0, count);
       chosen.forEach((u) => used.add(u.id));
       orders.push({
@@ -91,7 +116,7 @@ export function planOrders(
         y: target.star.y,
         star: target.star.id,
       });
-    } else if (idle.length > 150) {
+    } else if (idle.length > 65 && targets.length) {
       const frontier = homes
         .filter((h) => h.id !== home.id)
         .sort(
@@ -99,7 +124,12 @@ export function planOrders(
             Math.min(...targets.map((t) => distanceSq(t, a))) -
             Math.min(...targets.map((t) => distanceSq(t, b))),
         )[0];
-      if (frontier && distanceSq(home, frontier) < 3600 ** 2) {
+      if (
+        frontier &&
+        distanceSq(home, frontier) < 5000 ** 2 &&
+        Math.min(...targets.map((t) => distanceSq(t, frontier))) <
+          Math.min(...targets.map((t) => distanceSq(t, home)))
+      ) {
         const chosen = idle.slice(0, Math.floor(idle.length * 0.7));
         chosen.forEach((u) => used.add(u.id));
         orders.push({

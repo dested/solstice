@@ -14,6 +14,8 @@ import {
   Hand,
   CircleHelp,
   Maximize,
+  Maximize2,
+  Minimize2,
   ChevronRight,
   Radio,
   Orbit,
@@ -147,10 +149,17 @@ export function App() {
     [notice, setNotice] = useState(""),
     [fatal, setFatal] = useState("");
   const [pendingJoin, setPendingJoin] = useState(false);
+  const [overview, setOverview] = useState(false);
+  const [tips, setTips] = useState(
+    () => localStorage.getItem("solstice-hide-tips") !== "true",
+  );
   const [skipHelp, setSkipHelp] = useState(
     () => localStorage.getItem("solstice-skip-help") === "true",
   );
   const [activity, setActivity] = useState<string[]>([]);
+  useEffect(() => {
+    if (engine.current) engine.current.showTips = tips;
+  }, [tips]);
   const combatNotice = useRef(0);
   const welcome = useRef<{ id: number; home: number } | undefined>(undefined),
     noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -169,8 +178,10 @@ export function App() {
         hover: setHover,
         fps: setFps,
         feedback: toast,
+        overview: setOverview,
       });
       engine.current = e;
+      e.showTips = tips;
       if (import.meta.env.DEV)
         Object.defineProperty(window, "__solsticeDebug", {
           configurable: true,
@@ -492,32 +503,44 @@ export function App() {
               </strong>
             </div>
           </section>
-          <aside className="objective-panel">
-            <div className="eyebrow">
-              <span className="tiny-line" />
-              {me?.captured ? "YOUR EXPANSE" : "FIRST LIGHT"}
-            </div>
-            <h2>
-              {me?.captured
-                ? "Keep the light moving."
-                : "Every empire begins here."}
-            </h2>
-            <p>
-              {me?.captured
-                ? "Reinforce your borders. Feed ringed stars to increase their production."
-                : "Tap your star to select its swarm. Then tap a dim star to capture it."}
-            </p>
-            {shield > 0 && (
-              <div className="shield-indicator">
-                <Orbit size={14} />
-                <span>Sanctuary · {shield}s</span>
-                <small>Ends when you send units out</small>
+          {tips && (
+            <aside className="objective-panel">
+              <button
+                className="tips-close"
+                aria-label="Dismiss playing tips"
+                onClick={() => {
+                  setTips(false);
+                  localStorage.setItem("solstice-hide-tips", "true");
+                }}
+              >
+                <X size={16} />
+              </button>
+              <div className="eyebrow">
+                <span className="tiny-line" />
+                {me?.captured ? "YOUR EXPANSE" : "FIRST LIGHT"}
               </div>
-            )}
-            <button className="text-button" onClick={() => setHelp(true)}>
-              How to play <ChevronRight size={13} />
-            </button>
-          </aside>
+              <h2>
+                {me?.captured
+                  ? "Keep the light moving."
+                  : "Every empire begins here."}
+              </h2>
+              <p>
+                {me?.captured
+                  ? "Reinforce your borders. Feed ringed stars to increase their production."
+                  : "Tap your star to select its swarm. Then tap a dim star to capture it."}
+              </p>
+              {shield > 0 && (
+                <div className="shield-indicator">
+                  <Orbit size={14} />
+                  <span>Sanctuary · {shield}s</span>
+                  <small>Ends when you send units out</small>
+                </div>
+              )}
+              <button className="text-button" onClick={() => setHelp(true)}>
+                How to play <ChevronRight size={13} />
+              </button>
+            </aside>
+          )}
           <button
             className="mobile-ranks icon-button"
             aria-label="Toggle players"
@@ -587,8 +610,7 @@ export function App() {
               <kbd>F</kbd>
             </button>
             <div className="map-title">
-              <span>SECTOR MAP</span>
-              <span>↗</span>
+              <span>GALAXY MAP</span>
             </div>
             <canvas
               ref={mini}
@@ -610,17 +632,16 @@ export function App() {
               {Math.round(engine.current?.cameraX ?? 0)} :{" "}
               {Math.round(engine.current?.cameraY ?? 0)}
               <button
-                onClick={() =>
-                  engine.current?.focus(
-                    WORLD_SIZE / 2,
-                    WORLD_SIZE / 2,
-                    WORLD_SIZE * 1.1,
-                  )
+                onClick={() => engine.current?.toggleOverview()}
+                title={
+                  overview ? "Return to previous view" : "View whole galaxy"
                 }
-                title="View whole galaxy"
-                aria-label="View whole galaxy"
+                aria-label={
+                  overview ? "Return to previous view" : "View whole galaxy"
+                }
+                aria-pressed={overview}
               >
-                <Scan size={13} />
+                {overview ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
               </button>
             </div>
           </div>
@@ -838,6 +859,24 @@ export function App() {
               <span />
             </button>
           </div>
+          <div className="setting-row">
+            <div>
+              <strong>Playing tips</strong>
+              <p>Show the guidance panel</p>
+            </div>
+            <button
+              className={`switch ${tips ? "on" : ""}`}
+              role="switch"
+              aria-checked={tips}
+              aria-label="Playing tips"
+              onClick={() => {
+                localStorage.setItem("solstice-hide-tips", String(tips));
+                setTips(!tips);
+              }}
+            >
+              <span />
+            </button>
+          </div>
           <button className="settings-action" onClick={fullscreen}>
             <Maximize size={18} /> Toggle fullscreen <ArrowRight size={16} />
           </button>
@@ -889,11 +928,6 @@ export function App() {
             draw a selection box. Your sanctuary lasts 35 seconds, ending when
             you send units out. Worlds reset after their last explorer leaves
             and the reconnect window closes.
-          </p>
-          <p className="manual-note server-note">
-            The game runs on the server. Bots join as separate players and are
-            marked BOT in the Players list. The background on the start screen
-            is a local demo.
           </p>
           <label className="skip-help">
             <input

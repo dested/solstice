@@ -88,8 +88,8 @@ export function HowToPlay() {
           "The number under a neutral or enemy star is its defense. Send more units than that number, plus enough to beat enemy units nearby.",
         ],
         [
-          "Upgrade production",
-          "Send units into your own star to upgrade it. These units are spent: 60 for level 2, then 120 for level 3. Some stars have a lower maximum level.",
+          "Repair & upgrade",
+          "Send units home to repair: 1 unit heals 1 defense. Once full, units upgrade production: 60 for level 2, then 120 for level 3, up to the star’s limit.",
         ],
       ].map(([title, detail], i) => (
         <article key={title}>

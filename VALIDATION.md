@@ -3,11 +3,12 @@
 ## Passing checks
 
 - TypeScript check and optimized Vite production build.
-- 11 simulation/bot tests, 40 assertions: spawning, ownership validation, malformed orders, capture/production, evolution, one-for-one contact combat, sanctuary, particle caps, abandonment, interest streaming, binary serialization, bot orders and internal endpoint remapping.
-- 64 concurrent SDK clients in one room; the 65th creates another room. Movement is verified from server snapshots, forged ownership is rejected, and reconnection preserves faction identity.
+- 22 simulation/bot/presentation tests, 90 assertions. Round 2 adds repair-before-upgrade spending, max-level healing, collision survivors preserving orders, aggregated arrival feedback, human-neighbor spawning, and committed bot attacks that retain in-flight orders.
+- 64 concurrent SDK clients in one room; the 65th creates another room. Two independent clients receive identical positions for the same moving unit in at least three snapshots. Forged ownership is rejected and reconnection preserves faction identity.
 - Redis integration with two independent game processes and two independent bot workers. Checked cross-process matchmaking, room placement, authenticated atomic bot slots, bots capturing stars through network orders, bot worker replacement, human priority, and empty-world reset.
 - Chromium browser interaction tests: desktop selection, halving selection, movement and capture; page-reload reconnection; help dialog and Escape; audio/effects toggles; 390 × 844 mobile layout; real emulated touch events for star selection, pinch zoom and rectangular selection. No JavaScript or shader errors in the test run. Screenshots are local under `artifacts/`.
-- Linux amd64 Docker image built from the lockfile; the production container passed the 64-client network test. ARM64 deployment and real phone hardware were not tested.
+- Desktop and touch tests also verify galaxy overview/return, whole-world fit on a portrait phone, persistent tip dismissal, complete Players rendering and the shortened guide. The bx onboarding replay passed all 27 steps. The exploratory round-2 bx agent hit its wall limit; deterministic checks supplied the verification instead.
+- Linux amd64 Docker image built from the lockfile; the production container passed the 64-client network test. ARM64 ECS deployment subsequently passed HTTPS/WebSocket smoke checks. Real phone hardware has not been tested.
 
 ## Full-army benchmark
 
@@ -29,4 +30,4 @@ These measurements are from this development machine and a synthetic scenario. S
 
 ## Deployment boundary
 
-AWS/Drydock resources were not changed. Redis coordinates discovery and matchmaking, not simulation persistence. Each room remains on one game process; ingress must route its advertised public address to that process. Live room migration and durable checkpoints are not implemented. Bot workers scale separately and cannot keep a human-empty world alive.
+The app is deployed at https://solstice.dested.com through Drydock with separate game, bot and Redis services. See deploy/README.md for release commands and the current single-host ingress boundary. Redis coordinates discovery and matchmaking, not simulation persistence. Each room remains on one game process; ingress must route its advertised public address to that process. Live room migration and durable checkpoints are not implemented. Bot workers scale separately and cannot keep a human-empty world alive.

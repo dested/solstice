@@ -16,7 +16,7 @@ float n=fbm(p*4.+vec2(t+seed,-t));float fine=noise(p*30.+seed+t*2.);
 float disc=1.-smoothstep(.96,1.02,r);float sphere=sqrt(max(0.,1.-r*r));
 vec3 body=mix(vColor*.4,vColor*1.1+vec3(.08),sphere)*(.48+n*.75+fine*.2);
 float filaments=fbm(vec2(angle*5.+seed,r*6.-t*2.));
-float corona=exp(-max(0.,r-1.)*5.)*(.10+filaments*.32)*(1.-disc);
+float corona=exp(-max(0.,r-1.)*4.2)*(.10+pow(filaments,2.)*.9)*(1.-disc);
 float halo=exp(-r*r*1.1)*.08;
 float rim=exp(-abs(r-1.)*45.)*.7;
 float flare=exp(-abs(p.y)*48.)*exp(-abs(p.x)*1.4)*.12;
@@ -29,7 +29,7 @@ attribute vec3 tint;attribute float size;varying vec3 vColor;uniform float scale
 void main(){vColor=tint;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_PointSize=clamp(size*scale,1.5,18.);}`;
 export const particleFragment = `
 varying vec3 vColor;
-void main(){float r=length(gl_PointCoord-.5)*2.;float core=exp(-r*r*12.);float glow=exp(-r*r*3.)*.28;gl_FragColor=vec4(vColor*(core*1.05+glow*.35),1.);}`;
+void main(){float r=length(gl_PointCoord-.5)*2.;float core=exp(-r*r*8.);float glow=exp(-r*r*3.)*.28;gl_FragColor=vec4(vColor*(core*1.15+glow*.35),1.);}`;
 export const backgroundFragment = `
 uniform float time;varying vec2 vUv;
 ${noise}

@@ -1876,14 +1876,14 @@ h1 span {
   justify-content: center;
   gap: 9px;
   margin-bottom: 10px;
-  border: 1px solid #806847;
-  background: #302719;
-  color: #ffe0b3;
+  border: 1px solid #334454;
+  background: #101d2a;
+  color: #c5d4e2;
   border-radius: 5px;
   font-size: 14px;
 }
 .home-button:hover {
-  background: #483921;
+  background: #213244;
 }
 .home-button kbd {
   margin-left: auto;
@@ -2197,5 +2197,76 @@ h1 span {
   }
   .menu-bottom {
     display: none;
+  }
+}
+
+/* Feedback round 2: compact guidance, quieter navigation. */
+.tips-close {
+  position: absolute;
+  right: -6px;
+  top: -10px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: #b8c9d9;
+  background: #101d2acc;
+  border: 1px solid #334454;
+  border-radius: 50%;
+  pointer-events: auto;
+}
+.tips-close:hover {
+  color: white;
+  background: #24364a;
+}
+.objective-panel h2 {
+  padding-right: 20px;
+}
+.map-coordinates button[aria-pressed="true"] {
+  color: #ffe0b3;
+  background: #283a4c;
+}
+@media (min-width: 700px) and (max-height: 850px) {
+  .manual-modal {
+    padding: 20px 26px;
+  }
+  .manual-title {
+    font-size: 26px;
+    margin-bottom: 14px;
+  }
+  .manual-modal .modal-heading {
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+  }
+  .manual-modal .join-button {
+    min-height: 48px;
+    padding: 12px 20px;
+  }
+  .manual-cards {
+    gap: 10px;
+  }
+  .manual-cards article {
+    padding: 10px 14px;
+  }
+  .manual-diagram {
+    height: 64px;
+    margin-bottom: 8px;
+  }
+  .manual-cards p {
+    line-height: 1.5;
+  }
+  .manual-controls {
+    margin: 14px 0;
+  }
+  .manual-note {
+    margin: 12px 0;
+  }
+}
+@media (max-width: 699px) {
+  .tips-close {
+    width: 44px;
+    height: 44px;
+    top: -13px;
+    right: -28px;
   }
 }

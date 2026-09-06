@@ -130,7 +130,7 @@ const thinker = setInterval(() => {
       !bot.room.connection.isOpen
     )
       continue;
-    bot.nextThink = performance.now() + 1800 + Math.random() * 1200;
+    bot.nextThink = performance.now() + 900 + Math.random() * 500;
     const me = bot.world.players.find((p) => p.id === bot.id);
     if (me?.eliminated) {
       bot.room.send("respawn");
@@ -139,13 +139,23 @@ const thinker = setInterval(() => {
     const home =
       bot.world.stars.find((s) => s.id === me?.home && s.owner === bot.id) ??
       bot.world.stars.find((s) => s.owner === bot.id);
-    if (home)
+    if (home) {
+      // Follow the whole empire and advancing swarms, not only the founding star.
+      const territory = [
+        ...bot.world.stars.filter((s) => s.owner === bot.id),
+        ...bot.units.filter((u) => u.owner === bot.id),
+      ];
+      const minX = Math.min(...territory.map((p) => p.x)),
+        maxX = Math.max(...territory.map((p) => p.x));
+      const minY = Math.min(...territory.map((p) => p.y)),
+        maxY = Math.max(...territory.map((p) => p.y));
       bot.room.send("view", {
-        x: home.x,
-        y: home.y,
-        width: 2400,
-        height: 2000,
+        x: (minX + maxX) / 2,
+        y: (minY + maxY) / 2,
+        width: maxX - minX + 4400,
+        height: maxY - minY + 4400,
       });
+    }
     for (const order of planOrders(bot.world, bot.units, bot.id)) {
       bot.room.send("move", order);
       orders++;
