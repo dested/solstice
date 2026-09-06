@@ -1871,24 +1871,40 @@ h1 span {
 .home-button {
   display: flex;
   width: 100%;
-  min-height: 44px;
+  min-height: 40px;
+  padding: 8px 10px;
   align-items: center;
-  justify-content: center;
-  gap: 9px;
+  justify-content: flex-start;
+  gap: 8px;
   margin-bottom: 10px;
   border: 1px solid #334454;
   background: #101d2a;
   color: #c5d4e2;
   border-radius: 5px;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1;
+}
+.home-button svg {
+  flex-shrink: 0;
 }
 .home-button:hover {
   background: #213244;
 }
+.home-button:focus-visible {
+  outline: 2px solid #ffd094;
+  outline-offset: 3px;
+}
 .home-button kbd {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
   margin-left: auto;
-  font-size: 10px;
-  color: #b5a38a;
+  border: 1px solid #3d4c5b;
+  border-radius: 3px;
+  font: 10px "IBM Plex Mono", monospace;
+  color: #93a3b5;
 }
 .selection-info {
   font-size: 12px;
@@ -2126,6 +2142,8 @@ h1 span {
     bottom: 126px;
   }
   .home-button {
+    min-height: 44px;
+    justify-content: center;
     gap: 5px;
     font-size: 13px;
     margin-bottom: 6px;
