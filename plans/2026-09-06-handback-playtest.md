@@ -38,3 +38,10 @@ The frames override two report interpretations: the imagery request at 0:30 conc
 - `bun run build`: TypeScript and production build pass.
 
 Deployment files and actual AWS topology are documented separately in deploy/README.md. No simulation durability or automatic routing for additional game replicas was added by this playtest pass.
+
+## Production and review
+
+- Live at https://solstice.dested.com. Game and separate bot ECS services are stable at revision 3 on the same immutable image `local-327b019-dirty-0906-100738`, built from the frozen source subsequently committed as `b5ae497`.
+- Production WebSocket smoke received binary updates and five bots. The live container confirms `WORLD_SIZE = 13600`. Diagnostic clients left cleanly.
+- Production bx assertions verified four guide SVGs, Players, pinned YOU row, no console errors and return to menu. The agent reached its reporting wall limit: this is evidence of the observed assertions, not an overall bx PASS. Trailer: `tier=sonnet (escalated) ended=wall turns=74 wall=125.7s cost=$0.0490 est=$0.15`.
+- Posted all eleven outcomes and four proof screenshots to Handback for human review. Walkthrough was not marked resolved.
