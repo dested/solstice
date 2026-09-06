@@ -6,7 +6,7 @@ export const SPAWN_SHIELD = 35;
 export const UNIT_SPEED = 100;
 export const TICK = 1 / 20;
 export const PALETTE = ['#ffd094','#66e1ed','#fa7b9a','#b19aff','#91e6b0','#ff9869','#8faeff','#e8a4ec'];
-export function factionColor(id: number) { return id === 0 ? '#587188' : PALETTE[(id - 1) % PALETTE.length]; }
+export function factionColor(id: number) { return id === 0 ? '#587188' : id <= PALETTE.length ? PALETTE[id - 1] : `hsl(${Math.round(id * 137.508) % 360}, ${65 + id % 3 * 8}%, ${65 + id % 4 * 4}%)`; }
 export interface Star { id: number; name: string; x: number; y: number; owner: number; level: number; maxLevel: number; hp: number; maxHp: number; upgrade: number; production: number; shield: number; }
 export interface Player { id: number; name: string; bot: boolean; connected: boolean; stars: number; units: number; kills: number; captured: number; eliminated: boolean; joined: number; home: number; }
 export interface Unit { id: number; owner: number; x: number; y: number; tx: number; ty: number; star: number; moving: boolean; phase: number; }

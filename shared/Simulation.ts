@@ -3,7 +3,7 @@ import { WORLD_SIZE, UNIT_CAP, START_UNITS, SPAWN_SHIELD, UNIT_SPEED, MAX_PLAYER
 const NAMES = ['Alcyone','Vesper','Altair','Sol','Merope','Rigel','Lyra','Antares','Sirius','Maia','Arcturus','Vega','Atlas','Electra','Deneb','Mira','Polaris','Taygeta','Aster','Celeno','Capella','Orion','Nashira','Elara','Bellatrix','Castor','Hadar','Nerissa','Sadr','Talitha','Saiph','Celaeno'];
 export class Simulation {
   stars: Star[] = []; players = new Map<number, Player>(); units = new Map<number, Unit>(); events: WorldEvent[] = [];
-  time = 0; nextUnit = 1; nextPlayer = 1; private rng: number; private botClock = 0;
+  time = 0; nextUnit = 1; nextPlayer = 1; autonomousBots = true; private rng: number; private botClock = 0; private abandoned = new Map<number, number>();
   constructor(seed = Date.now()) {
     this.rng = seed >>> 0;
     for (let row = 0; row < 19; row++) for (let col = 0; col < 19; col++) {
@@ -55,6 +55,7 @@ export class Simulation {
   abandon(id: number) {
     const p = this.players.get(id); if (!p) return;
     p.connected = false;
+    this.abandoned.set(id, this.time);
     // Abandoned stars and swarms remain conquerable, but no new units are produced.
     for (const s of this.stars) if (s.owner === id) s.shield = 0;
   }
@@ -62,6 +63,7 @@ export class Simulation {
     for (const u of this.units.values()) if (u.owner === id) this.removeUnit(u);
     for (const s of this.stars) if (s.owner === id) { s.owner = 0; s.level = 1; s.hp = 28; s.shield = 0; s.upgrade = 0; }
     this.players.delete(id);
+    this.abandoned.delete(id);
   }
   order(owner: number, order: MoveOrder): number {
     if (!order || !Array.isArray(order.ids) || order.ids.length > UNIT_CAP || !Number.isFinite(order.x) || !Number.isFinite(order.y)) return 0;
@@ -117,7 +119,7 @@ export class Simulation {
     }
     this.collide();
     this.botClock += dt;
-    if (this.botClock >= 2) { this.botClock = 0; this.recount(); this.thinkBots(); this.cleanup(); }
+    if (this.botClock >= 2) { this.botClock = 0; this.recount(); if (this.autonomousBots) this.thinkBots(); this.cleanup(); }
   }
   private collide() {
     // Spatial hash: contact combat is local, rather than O(n²) across the galaxy.
@@ -161,7 +163,7 @@ export class Simulation {
     }
   }
   private cleanup() {
-    for (const p of this.players.values()) if (!p.connected && (p.eliminated || this.time - p.joined > 600)) this.retire(p.id);
+    for (const p of this.players.values()) if (!p.connected && (p.eliminated || this.time - (this.abandoned.get(p.id) ?? this.time) > 600)) this.retire(p.id);
   }
   visible(owner: number, view: Viewport, limit = 6000): Unit[] {
     const result: Unit[] = []; const others: Unit[] = [];

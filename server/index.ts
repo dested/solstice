@@ -3,7 +3,7 @@ import { BunWebSockets } from '@colyseus/bun-websockets';
 import { RedisPresence } from '@colyseus/redis-presence';
 import { RedisDriver } from '@colyseus/redis-driver';
 import { resolve, extname, sep } from 'node:path';
-import { UniverseRoom, liveRooms, allowedOrigin } from './UniverseRoom';
+import { UniverseRoom, liveRooms, allowedOrigin, validBotToken } from './UniverseRoom';
 
 const port = Number(process.env.PORT ?? 2567);
 const redis = process.env.REDIS_URL;
@@ -18,8 +18,13 @@ const game = new Server({
   express: app => {
     app.get('/healthz', (_req, res) => { res.status(draining ? 503 : 200).json({ok: !draining, uptime: Math.round(process.uptime()), rooms: liveRooms.size}); });
     app.get('/api/status', async (_req, res) => {
-      try { const rooms = await matchMaker.query({name: 'universe', locked: false}); res.json({players: rooms.reduce((n, r) => n + r.clients, 0), worlds: rooms.length, capacity: 64}); }
+      try { const rooms = await matchMaker.query({name: 'universe'}); res.json({players: rooms.reduce((n, r) => n + (r.metadata?.humans ?? 0), 0), worlds: rooms.length, capacity: 64}); }
       catch { res.status(503).json({error: 'Matchmaking unavailable'}); }
+    });
+    app.get('/api/bot-worlds',async(req,res)=>{
+      if(!validBotToken(req.headers.authorization?.replace(/^Bearer /,''))){res.status(403).json({error:'Forbidden'});return;}
+      const rooms=await matchMaker.query({name:'universe',locked:false});
+      res.json(rooms.map(r=>({roomId:r.roomId,...r.metadata})));
     });
     app.use(async (req, res) => {
       if (req.method !== 'GET' && req.method !== 'HEAD') { res.status(404).end(); return; }

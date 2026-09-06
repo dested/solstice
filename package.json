@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:network": "bun scripts/network-test.ts",
-    "benchmark": "bun scripts/benchmark.ts"
+    "benchmark": "bun scripts/benchmark.ts",
+    "bots": "bun bots/index.ts"
   },
   "dependencies": {
     "@colyseus/bun-websockets": "0.18.2",

@@ -14,14 +14,14 @@ vec2 p=(vUv-.5)*6.;float r=length(p);float angle=atan(p.y,p.x);float seed=vParam
 float owned=step(.5,seed);float t=time*.13;
 float n=fbm(p*4.+vec2(t+seed,-t));float fine=noise(p*30.+seed+t*2.);
 float disc=1.-smoothstep(.96,1.02,r);float sphere=sqrt(max(0.,1.-r*r));
-vec3 body=mix(vColor*.5,vColor*1.8+vec3(.35),sphere)*(.65+n*.7+fine*.15);
+vec3 body=mix(vColor*.4,vColor*1.1+vec3(.08),sphere)*(.48+n*.75+fine*.2);
 float filaments=fbm(vec2(angle*5.+seed,r*6.-t*2.));
-float corona=exp(-max(0.,r-1.)*4.)*(.13+filaments*.24)*(1.-disc);
-float halo=exp(-r*r*.65)*.16;
-float rim=exp(-abs(r-1.)*45.)*.9;
+float corona=exp(-max(0.,r-1.)*5.)*(.10+filaments*.32)*(1.-disc);
+float halo=exp(-r*r*1.1)*.08;
+float rim=exp(-abs(r-1.)*45.)*.7;
 float flare=exp(-abs(p.y)*48.)*exp(-abs(p.x)*1.4)*.12;
 vec3 col=(body*disc+vColor*(corona+halo+rim+flare))*owned;
-col+= (vec3(.025,.05,.075)*disc*(.6+n)+vColor*(rim*.19+halo*.10))*(1.-owned);
+col+= (vec3(.007,.013,.02)*disc*(.6+n)+vColor*(rim*.23+halo*.10))*(1.-owned);
 gl_FragColor=vec4(col,1.);
 }`;
 export const particleVertex = `

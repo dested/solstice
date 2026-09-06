@@ -1,19 +1,26 @@
 import { Room, type Client, type AuthContext, ServerError } from '@colyseus/core';
+import { timingSafeEqual } from 'node:crypto';
 import { Simulation } from '../shared/Simulation';
 import { MAX_PLAYERS, TICK, WORLD_SIZE, clamp, encodeUnits, type MoveOrder, type Viewport, type WorldEvent } from '../shared/types';
 
 export const liveRooms = new Set<UniverseRoom>();
+export const botTarget = clamp(Number(process.env.BOT_TARGET ?? 6), 0, 12);
+export function validBotToken(token: unknown) {
+  const expected = process.env.BOT_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev-bot-secret' : '');
+  return !!expected && typeof token === 'string' && token.length <= 256 && Buffer.byteLength(token) === Buffer.byteLength(expected) && timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+}
 export function allowedOrigin(headers: Headers) {
   const origin = headers.get('origin'); if (!origin || process.env.NODE_ENV !== 'production') return true;
   const allowed = (process.env.ALLOWED_ORIGINS ?? '').split(',').map(v => v.trim()).filter(Boolean);
   if (allowed.includes(origin)) return true;
   try { return new URL(origin).host === headers.get('host'); } catch { return false; }
 }
-interface Seat { player: number; view: Viewport; tokens: number; last: number; }
+interface Seat { player: number; view: Viewport; tokens: number; last: number; botSlot?: number; }
 export class UniverseRoom extends Room {
   maxClients = MAX_PLAYERS; maxMessagesPerSecond = 30; autoDispose = true;
   sim = new Simulation(); seats = new Map<string, Seat>(); private frame = 0; private pending: WorldEvent[] = [];
   onCreate() {
+    this.sim.autonomousBots = false;
     liveRooms.add(this); this.setPatchRate(null);
     this.onMessage('move', (client, msg: MoveOrder) => {
       const seat = this.seats.get(client.sessionId); if (!seat) return;
@@ -47,21 +54,28 @@ export class UniverseRoom extends Room {
   onAuth(_client: Client, options: unknown, context: AuthContext) {
     if (!allowedOrigin(context.headers)) throw new ServerError(403, 'Origin not allowed');
     if (!options || typeof options !== 'object' || ('name' in options && typeof options.name !== 'string')) throw new ServerError(400, 'Invalid name');
+    if ('bot' in options && options.bot && (!('token' in options) || !validBotToken(options.token))) throw new ServerError(403, 'Invalid bot credential');
     return true;
   }
-  onJoin(client: Client, options: { name?: string }) {
+  onJoin(client: Client, options: { name?: string; bot?: boolean; slot?: number }) {
+    const humans = [...this.seats.values()].filter(s => s.botSlot === undefined).length;
+    if(options.bot && (!Number.isInteger(options.slot) || options.slot! < 0 || options.slot! >= Math.max(0, botTarget - humans) || !humans || [...this.seats.values()].some(s => s.botSlot === options.slot))) throw new ServerError(409, 'Bot slot unavailable');
     // Make room for humans first; bots never consume the last human seat.
     if (this.sim.players.size >= MAX_PLAYERS) {
       const expendable = [...this.sim.players.values()].find(p => p.bot || !p.connected);
       if (expendable) this.sim.retire(expendable.id);
     }
-    const p = this.sim.addPlayer(options.name ?? 'Wanderer');
+    const p = this.sim.addPlayer(options.name ?? 'Wanderer', !!options.bot);
     const home = this.sim.stars[p.home];
-    this.seats.set(client.sessionId, {player: p.id, view: {x: home.x, y: home.y, width: 1700, height: 1200}, tokens: 8, last: performance.now()});
-    if (this.clients.length === 1 && this.sim.players.size === 1 && process.env.BOTS !== '0') {
-      for (const name of ['KEPLER', 'HALLEY', 'CASSINI', 'VOYAGER']) this.sim.addPlayer(name, true);
-    }
+    this.seats.set(client.sessionId, {player: p.id, view: {x: home.x, y: home.y, width: 1700, height: 1200}, tokens: 8, last: performance.now(), botSlot: options.bot ? options.slot : undefined});
+    this.reconcileBots();
     this.welcome(client);
+  }
+  private reconcileBots() {
+    const humans = [...this.seats.values()].filter(s => s.botSlot === undefined).length;
+    const target = humans ? Math.max(0, botTarget - humans) : 0;
+    for(const client of [...this.clients]) {const seat=this.seats.get(client.sessionId);if(seat?.botSlot!==undefined && seat.botSlot>=target) client.leave();}
+    void this.setMetadata({humans, botSlots:[...this.seats.values()].flatMap(s=>s.botSlot===undefined?[]:[s.botSlot]), botTarget});
   }
   welcome(client: Client) {
     const seat = this.seats.get(client.sessionId); if (!seat) return;
@@ -81,10 +95,11 @@ export class UniverseRoom extends Room {
     }
     this.pending = [];
   }
-  onDrop(client: Client) { this.allowReconnection(client, 30); }
+  onDrop(client: Client) { const seat=this.seats.get(client.sessionId); if (seat && seat.botSlot===undefined) void this.allowReconnection(client, 30).catch(()=>{}); }
   onReconnect(client: Client) { this.welcome(client); }
   onLeave(client: Client) {
     const seat = this.seats.get(client.sessionId); if (seat) { this.sim.abandon(seat.player); this.seats.delete(client.sessionId); }
+    this.reconcileBots();
   }
   onDispose() { liveRooms.delete(this); }
 }

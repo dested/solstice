@@ -23,7 +23,9 @@ export function App() {
   const toast=(message:string)=>{setNotice(message);clearTimeout(noticeTimer.current);noticeTimer.current=setTimeout(()=>setNotice(''),5500);};
   useEffect(()=>{
     if(!mount.current)return;
-    try {const e=new GalaxyRenderer(mount.current,{selection:setSelected,order:o=>network.current?.order(o),view:v=>network.current?.view(v),hover:setHover,fps:setFps});engine.current=e;startAttract(e);return()=>{e.dispose();engine.current=undefined;};}
+    try {const e=new GalaxyRenderer(mount.current,{selection:setSelected,order:o=>network.current?.order(o),view:v=>network.current?.view(v),hover:setHover,fps:setFps});engine.current=e;
+      if(import.meta.env.DEV) Object.defineProperty(window,'__solsticeDebug',{configurable:true,get:()=>({world:e.world,player:e.player,view:e.getView(),selected:[...e.selected],units:[...e.units.values()]})});
+      startAttract(e);return()=>{e.dispose();engine.current=undefined;};}
     catch {setFatal('Your browser couldn’t start WebGL. Enable hardware acceleration or try a recent version of Chrome, Edge, Firefox, or Safari.');}
   },[]);
   useEffect(()=>{let active=true;const refresh=async()=>{try{const r=await fetch(`${serverUrl}/api/status`);if(r.ok&&active)setPopulation(await r.json());}catch{if(active)setPopulation(null);}};refresh();const t=setInterval(refresh,12000);return()=>{active=false;clearInterval(t);};},[]);

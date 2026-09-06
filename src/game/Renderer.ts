@@ -62,6 +62,7 @@ export class GalaxyRenderer {
   private color(owner: number) { let c = this.colorCache.get(owner); if (!c) { c = new THREE.Color(factionColor(owner)); this.colorCache.set(owner, c); } return c; }
   setWorld(world: WorldMeta) {
     this.world = world;
+    if(this.hoverStar){this.hoverStar=world.stars[this.hoverStar.id];this.callbacks.hover(this.hoverStar);}
     const centers = new Float32Array(world.stars.length * 3), colors = new Float32Array(world.stars.length * 3), params = new Float32Array(world.stars.length * 2);
     world.stars.forEach((s, i) => { centers.set([s.x, -s.y, 0], i * 3); const c = this.color(s.owner); colors.set([c.r, c.g, c.b], i * 3); params.set([radius(s), s.owner ? s.id + 1 : 0], i * 2); });
     this.starGeo.setAttribute('center', new THREE.InstancedBufferAttribute(centers, 3)); this.starGeo.setAttribute('tint', new THREE.InstancedBufferAttribute(colors, 3)); this.starGeo.setAttribute('params', new THREE.InstancedBufferAttribute(params, 2)); this.starGeo.instanceCount = world.stars.length;
@@ -103,7 +104,7 @@ export class GalaxyRenderer {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
   private animate = (now: number) => {
-    this.animation = requestAnimationFrame(this.animate); const dt = Math.min(.05, (now - (this.lastTime || now)) / 1000); this.lastTime = now;
+    this.animation = requestAnimationFrame(this.animate); const elapsed = (now - (this.lastTime || now)) / 1000; const dt = Math.min(.05, elapsed); this.lastTime = now;
     this.onDemoFrame?.(dt);
     const ease = this.reducedMotion ? 1 : 1 - Math.exp(-dt * 8);
     this.cameraX += (this.targetX - this.cameraX) * ease; this.cameraY += (this.targetY - this.cameraY) * ease; this.viewHeight += (this.targetHeight - this.viewHeight) * ease;
@@ -112,7 +113,7 @@ export class GalaxyRenderer {
     this.drawParticles(now); this.composer.render(); this.drawOverlay(now);
     if (this.frame++ % 8 === 0) this.drawMinimap();
     if (this.playing && now - this.lastView > 250) { this.lastView = now; this.callbacks.view(this.getView()); }
-    this.frameCount++; this.frameTime += dt; if (this.frameTime >= 1) { this.callbacks.fps(Math.round(this.frameCount / this.frameTime)); this.frameCount = 0; this.frameTime = 0; }
+    this.frameCount++; this.frameTime += elapsed; if (this.frameTime >= 1) { this.callbacks.fps(Math.round(this.frameCount / this.frameTime)); this.frameCount = 0; this.frameTime = 0; }
   };
   private drawParticles(now: number) {
     const t = clamp((now - this.snapshotTime) / 100, 0, 1); let count = 0;
