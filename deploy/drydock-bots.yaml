@@ -1,0 +1,10 @@
+# Onboard this same repository as a second Drydock project, using these values.
+name: solstice-bots
+kind: ssr
+runtime: bun
+port: 2568
+size: s
+build: bun run typecheck
+start: bun bots/index.ts
+database: false
+prisma: false

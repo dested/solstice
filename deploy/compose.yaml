@@ -1,0 +1,52 @@
+name: solstice
+services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  game-a:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    environment:
+      PORT: 2567
+      REDIS_URL: redis://redis:6379
+      PUBLIC_ADDRESS: localhost:8080/worker-a
+      ALLOWED_ORIGINS: http://localhost:8080
+      BOT_SECRET: local-compose-secret-change-for-production
+      BOT_TARGET: 6
+      DRAIN_SECONDS: 5
+    depends_on:
+      redis: { condition: service_healthy }
+    stop_grace_period: 15s
+  game-b:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    environment:
+      PORT: 2567
+      REDIS_URL: redis://redis:6379
+      PUBLIC_ADDRESS: localhost:8080/worker-b
+      ALLOWED_ORIGINS: http://localhost:8080
+      BOT_SECRET: local-compose-secret-change-for-production
+      BOT_TARGET: 6
+      DRAIN_SECONDS: 5
+    depends_on:
+      redis: { condition: service_healthy }
+    stop_grace_period: 15s
+  gateway:
+    image: nginx:alpine
+    ports: ["8080:80"]
+    volumes: ["./nginx.conf:/etc/nginx/nginx.conf:ro"]
+    depends_on: [game-a, game-b]
+  bots:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    command: [bun, bots/index.ts]
+    environment:
+      PORT: 2568
+      GAME_SERVER_URL: http://gateway
+      # Bot clients route inside Docker to the exact room-owning process.
+      BOT_PUBLIC_ADDRESS_MAP: '{"localhost:8080/worker-a":"http://game-a:2567","localhost:8080/worker-b":"http://game-b:2567"}'
+      BOT_SECRET: local-compose-secret-change-for-production
+      BOT_WORKER_CAPACITY: 24
+    depends_on: [gateway]

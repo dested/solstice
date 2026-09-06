@@ -1,0 +1,9 @@
+name: solstice
+kind: ssr
+runtime: bun
+port: 2567
+size: l
+build: bun run build
+start: bun server/index.ts
+database: false
+prisma: false
