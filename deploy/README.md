@@ -8,8 +8,8 @@ only the box's internal port 16379; no security-group ingress was added.
 
 ## Deploy from this checkout
 
-Drydock is configured for local uploads because this repository has no GitHub
-remote. The root `Dockerfile` builds one image; `SOLSTICE_SERVICE=bots` selects the
+Drydock deploys local uploads from this checkout. The public source is at
+[dested/solstice](https://github.com/dested/solstice). The root `Dockerfile` builds one image; `SOLSTICE_SERVICE=bots` selects the
 bot process. The bot project's SSM environment sets that selector. Both services
 run the exact same immutable image tag, independently.
 

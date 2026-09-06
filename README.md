@@ -2,6 +2,8 @@
 
 A browser-native, Auralux-inspired multiplayer RTS. One particle type, one movement command, free-space battles, automatic star production, capturable stars, and reinforcement-funded evolution. Original procedural visuals and synthesized audio; no original-game assets are used.
 
+Start development with the [project map](cliffnotes.md) and [visual conventions](ui.md).
+
 ## Play locally
 
 ```sh
