@@ -24,8 +24,25 @@ const watch = (p: Page) => {
       errors.push(m.text());
   });
 };
+async function navigate(page: Page) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await page.goto(url);
+      return;
+    } catch (error) {
+      // Starting/stopping WSL Docker can briefly change Windows interfaces.
+      if (
+        attempt === 2 ||
+        !(error instanceof Error) ||
+        !error.message.includes("ERR_NETWORK_CHANGED")
+      )
+        throw error;
+      await page.waitForTimeout(500);
+    }
+  }
+}
 async function join(page: Page, name: string) {
-  await page.goto(url);
+  await navigate(page);
   await page.getByRole("textbox", { name: "Your callsign" }).fill(name);
   await page
     .getByRole("button", { name: "Join the universe", exact: true })
@@ -69,7 +86,7 @@ try {
   });
   const page = await context.newPage();
   watch(page);
-  await page.goto(url);
+  await navigate(page);
   await page.waitForTimeout(1000);
   await page.screenshot({ path: "artifacts/desktop-menu.png" });
   await join(page, "Desktop QA");
@@ -137,7 +154,7 @@ try {
   });
   const phone = await mobile.newPage();
   watch(phone);
-  await phone.goto(url);
+  await navigate(phone);
   await phone.waitForTimeout(900);
   await phone.screenshot({ path: "artifacts/mobile-menu.png" });
   assert.equal(
