@@ -48,7 +48,7 @@ export function planOrders(
     const idle = local.filter((u) => !used.has(u.id));
     if (idle.length < 45 || attackers > 10) continue;
     const candidates = targets
-      .filter((s) => distanceSq(s, home) < 1050 ** 2)
+      .filter((s) => distanceSq(s, home) < 2100 ** 2)
       .map((s) => ({
         star: s,
         defenders: enemies.filter((u) => distanceSq(u, s) < 155 ** 2).length,
@@ -99,7 +99,7 @@ export function planOrders(
             Math.min(...targets.map((t) => distanceSq(t, a))) -
             Math.min(...targets.map((t) => distanceSq(t, b))),
         )[0];
-      if (frontier && distanceSq(home, frontier) < 1800 ** 2) {
+      if (frontier && distanceSq(home, frontier) < 3600 ** 2) {
         const chosen = idle.slice(0, Math.floor(idle.length * 0.7));
         chosen.forEach((u) => used.add(u.id));
         orders.push({

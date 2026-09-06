@@ -47,8 +47,22 @@ async function join(page: Page, name: string) {
   await page
     .getByRole("button", { name: "Join the universe", exact: true })
     .click();
+  const start = page.getByRole("button", {
+    name: "Start playing",
+    exact: true,
+  });
+  if (await start.isVisible()) {
+    assert.equal(await page.locator(".manual-diagram").count(), 4);
+    await page.getByRole("checkbox").check();
+    await start.click();
+  }
   await page.waitForFunction(() => window.__solsticeDebug?.player > 0);
   await page.waitForTimeout(900);
+  assert.ok(
+    (
+      await page.locator('[data-testid="your-player-row"]').innerText()
+    ).includes(name),
+  );
 }
 async function screenStar(page: Page, own: boolean) {
   return page.evaluate((own) => {
@@ -84,12 +98,33 @@ try {
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
   });
+  await context.addInitScript(() => {
+    const proto = WebGL2RenderingContext.prototype;
+    const original = proto.drawElementsInstanced;
+    proto.drawElementsInstanced = function (...args) {
+      (window as unknown as { drawnStars: number }).drawnStars = args[4];
+      return original.apply(this, args);
+    };
+  });
   const page = await context.newPage();
   watch(page);
   await navigate(page);
   await page.waitForTimeout(1000);
   await page.screenshot({ path: "artifacts/desktop-menu.png" });
   await join(page, "Desktop QA");
+  assert.equal(
+    await page.evaluate(
+      () => (window as unknown as { drawnStars: number }).drawnStars,
+    ),
+    await page.evaluate(() => window.__solsticeDebug.world.stars.length),
+    "all live stars rendered after leaving the ten-star menu",
+  );
+  await page
+    .getByRole("button", { name: "View whole galaxy", exact: true })
+    .click();
+  await page.waitForTimeout(700);
+  await page.getByRole("button", { name: "Home (F)", exact: true }).click();
+  await page.waitForTimeout(800);
   const initial = await page.evaluate(
     () =>
       window.__solsticeDebug.world.players.find(
@@ -131,7 +166,10 @@ try {
     .click();
   await page.waitForFunction(() => window.__solsticeDebug.player > 0);
   assert.equal(await page.evaluate(() => window.__solsticeDebug.player), oldId);
-  await page.getByRole("button", { name: "How to play", exact: true }).click();
+  await page
+    .getByRole("button", { name: "How to play", exact: true })
+    .first()
+    .click();
   assert.equal(await page.locator("dialog").count(), 1);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -170,6 +208,17 @@ try {
     (await phone.evaluate(() => window.__solsticeDebug.selected.length)) > 0,
   );
   await phone.getByRole("button", { name: "Clear", exact: false }).click();
+  await phone
+    .getByRole("button", { name: "Toggle players", exact: true })
+    .click();
+  assert.ok(
+    (
+      await phone.locator('[data-testid="your-player-row"]').innerText()
+    ).includes("Touch QA"),
+  );
+  await phone
+    .getByRole("button", { name: "Toggle players", exact: true })
+    .click();
   // Actual touch events verify pinch zoom and distinguish panning from selection.
   const cdp = await mobile.newCDPSession(phone);
   const before = await phone.evaluate(() => window.__solsticeDebug.view.height);

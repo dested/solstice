@@ -26,16 +26,16 @@ import {
 } from "lucide-react";
 import { GalaxyRenderer } from "./game/Renderer";
 import { Network, serverUrl } from "./game/Network";
+import { HowToPlay } from "./HowToPlay";
+import { rankedPlayers, starDetails, eventMessage } from "./game/presentation";
 import { startAttract } from "./game/demo";
 import {
   WORLD_SIZE,
   UNIT_CAP,
   factionColor,
-  upgradeCost,
   type WorldMeta,
   type Star,
 } from "../shared/types";
-
 function SunMark({ small = false }: { small?: boolean }) {
   return (
     <svg
@@ -83,7 +83,9 @@ function Modal({
   title,
   children,
   onClose,
+  className = "",
 }: {
+  className?: string;
   title: string;
   children: ReactNode;
   onClose: () => void;
@@ -97,7 +99,7 @@ function Modal({
   return (
     <dialog
       ref={ref}
-      className="modal"
+      className={`modal ${className}`}
       onCancel={onClose}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -144,6 +146,12 @@ export function App() {
     [leaderboard, setLeaderboard] = useState(false),
     [notice, setNotice] = useState(""),
     [fatal, setFatal] = useState("");
+  const [pendingJoin, setPendingJoin] = useState(false);
+  const [skipHelp, setSkipHelp] = useState(
+    () => localStorage.getItem("solstice-skip-help") === "true",
+  );
+  const [activity, setActivity] = useState<string[]>([]);
+  const combatNotice = useRef(0);
   const welcome = useRef<{ id: number; home: number } | undefined>(undefined),
     noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const toast = (message: string) => {
@@ -160,6 +168,7 @@ export function App() {
         view: (v) => network.current?.view(v),
         hover: setHover,
         fps: setFps,
+        feedback: toast,
       });
       engine.current = e;
       if (import.meta.env.DEV)
@@ -211,10 +220,10 @@ export function App() {
     world?.stars
       .filter((s) => s.owner === player)
       .reduce((n, s) => n + s.level * 1.7, 0) ?? 0;
-  const leaders = [...(world?.players ?? [])]
-    .filter((p) => !p.eliminated)
-    .sort((a, b) => b.stars - a.stars || b.units - a.units)
-    .slice(0, 5);
+  const ranking = rankedPlayers(world?.players ?? [], player);
+  const leaders = ranking.all.filter((p) => p.id !== player);
+  const inspected =
+    hover && starDetails(hover, player, world?.time ?? 0, world?.players ?? []);
   const humans =
     world?.players.filter((p) => !p.bot && p.connected).length ?? 0;
   const toggleSound = async () => {
@@ -225,6 +234,7 @@ export function App() {
     if (mode === "joining" || fatal) return;
     setMode("joining");
     setNotice("");
+    setActivity([]);
     localStorage.setItem("solstice-name", name);
     const e = engine.current!;
     const n = new Network({
@@ -247,6 +257,18 @@ export function App() {
       },
       events: (events) => {
         e.event(events);
+        const messages: string[] = [];
+        for (const event of events) {
+          const message = eventMessage(event, e.player, e.world.players);
+          if (!message) continue;
+          if (event.kind === "clash") {
+            if (performance.now() - combatNotice.current < 5000) continue;
+            combatNotice.current = performance.now();
+          } else toast(message);
+          if (!messages.includes(message)) messages.push(message);
+        }
+        if (messages.length)
+          setActivity((old) => [...messages.reverse(), ...old].slice(0, 3));
       },
       status: setStatus,
       notice: toast,
@@ -307,17 +329,17 @@ export function App() {
           <span>SOLSTICE</span>
           <span className="brand-divider" />
           <span className="edition">
-            {mode === "playing" ? "THE EXPANSE" : "MULTIPLAYER / ALPHA"}
+            {mode === "playing" ? "MULTIPLAYER" : "MULTIPLAYER / ALPHA"}
           </span>
         </div>
         <div className="header-right">
           <span className="live-label">
             <i />
             {mode === "playing"
-              ? `${humans} / 64 EXPLORERS`
+              ? `${humans} / 64 PLAYERS`
               : population
-                ? `${population.players} EXPLORERS ONLINE`
-                : "ESTABLISHING UPLINK"}
+                ? `${population.players} PLAYERS ONLINE`
+                : "CONNECTING"}
           </span>
           <IconButton label="How to play" onClick={() => setHelp(true)}>
             <CircleHelp size={18} />
@@ -347,12 +369,15 @@ export function App() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                join();
+                if (!localStorage.getItem("solstice-help-seen") && !skipHelp) {
+                  setPendingJoin(true);
+                  setHelp(true);
+                } else join();
               }}
               className="join-form"
             >
               <label htmlFor="callsign">
-                YOUR CALLSIGN <span>NO ACCOUNT NEEDED</span>
+                PLAYER NAME <span>NO ACCOUNT NEEDED</span>
               </label>
               <div className="name-field">
                 <span className="player-spark" />
@@ -453,7 +478,7 @@ export function App() {
               </strong>
             </div>
             <div>
-              <span>SWARM</span>
+              <span>UNITS</span>
               <strong>
                 {me?.units ?? 0}
                 <small> / {UNIT_CAP.toLocaleString()}</small>
@@ -490,44 +515,60 @@ export function App() {
               </div>
             )}
             <button className="text-button" onClick={() => setHelp(true)}>
-              Flight manual <ChevronRight size={13} />
+              How to play <ChevronRight size={13} />
             </button>
           </aside>
           <button
             className="mobile-ranks icon-button"
-            aria-label="Toggle leaderboard"
+            aria-label="Toggle players"
             onClick={() => setLeaderboard(!leaderboard)}
           >
             <Trophy size={17} />
           </button>
           <aside className={`leaderboard ${leaderboard ? "expanded" : ""}`}>
             <div className="board-heading">
-              <span>THE CONSTELLATION</span>
+              <span>PLAYERS</span>
               <span>
                 <Orbit size={12} /> STARS
               </span>
             </div>
-            {leaders.map((p, i) => (
+            {ranking.mine && (
               <div
-                className={`leader-row ${p.id === player ? "you" : ""}`}
-                key={p.id}
+                className="leader-row you pinned-player"
+                data-testid="your-player-row"
               >
-                <span className="rank">{String(i + 1).padStart(2, "0")}</span>
-                <i
-                  style={{
-                    background: factionColor(p.id),
-                    boxShadow: `0 0 10px ${factionColor(p.id)}55`,
-                  }}
-                />
+                <span className="rank">{ranking.mine.rank}</span>
+                <i style={{ background: factionColor(player) }} />
                 <span className="leader-name">
-                  {p.name}
-                  {p.id === player && <small>YOU</small>}
-                  {p.bot && <small>AI</small>}
-                  {!p.connected && <small>AWAY</small>}
+                  {ranking.mine.name}
+                  <small>YOU</small>
                 </span>
-                <strong>{p.stars}</strong>
+                <strong>{ranking.mine.stars}</strong>
               </div>
-            ))}
+            )}
+            <div className="player-scroll">
+              {leaders.map((p) => (
+                <div
+                  className={`leader-row ${p.id === player ? "you" : ""}`}
+                  key={p.id}
+                >
+                  <span className="rank">{p.rank}</span>
+                  <i
+                    style={{
+                      background: factionColor(p.id),
+                      boxShadow: `0 0 10px ${factionColor(p.id)}55`,
+                    }}
+                  />
+                  <span className="leader-name">
+                    {p.name}
+                    {p.id === player && <small>YOU</small>}
+                    {p.bot && <small>BOT</small>}
+                    {!p.connected && <small>AWAY</small>}
+                  </span>
+                  <strong>{p.stars}</strong>
+                </div>
+              ))}
+            </div>
             <div className="board-footer">
               <span>WORLD {world?.room.slice(0, 6).toUpperCase()}</span>
               <span>
@@ -536,6 +577,15 @@ export function App() {
             </div>
           </aside>
           <div className="minimap-panel">
+            <button
+              className="home-button"
+              onClick={() => engine.current?.home()}
+              aria-label="Home (F)"
+            >
+              <Crosshair size={17} />
+              <span>Home</span>
+              <kbd>F</kbd>
+            </button>
             <div className="map-title">
               <span>SECTOR MAP</span>
               <span>↗</span>
@@ -560,7 +610,13 @@ export function App() {
               {Math.round(engine.current?.cameraX ?? 0)} :{" "}
               {Math.round(engine.current?.cameraY ?? 0)}
               <button
-                onClick={() => engine.current?.focus(3400, 3400, 7400)}
+                onClick={() =>
+                  engine.current?.focus(
+                    WORLD_SIZE / 2,
+                    WORLD_SIZE / 2,
+                    WORLD_SIZE * 1.1,
+                  )
+                }
                 title="View whole galaxy"
                 aria-label="View whole galaxy"
               >
@@ -664,21 +720,18 @@ export function App() {
               {sound ? <Volume2 size={17} /> : <VolumeX size={17} />}
             </IconButton>
           </div>
-          {hover && (
+          {hover && inspected && (
             <div className="star-tooltip">
               <i style={{ background: factionColor(hover.owner) }} />
-              <strong>{hover.name}</strong>
-              <span>
-                {hover.owner === player
-                  ? hover.level < hover.maxLevel
-                    ? `${upgradeCost(hover) - hover.upgrade} particles to evolve · +1.7/s`
-                    : "Fully evolved"
-                  : hover.shield > (world?.time ?? 0)
-                    ? "Protected sanctuary"
-                    : `${Math.ceil(hover.hp)} particles to capture`}
-              </span>
+              <strong>{inspected.title}</strong>
+              <span>{inspected.detail}</span>
             </div>
           )}
+          <div className="activity-feed" aria-label="Battle updates">
+            {activity.slice(0, 2).map((message, i) => (
+              <p key={`${i}-${message}`}>{message}</p>
+            ))}
+          </div>
           {status === "reconnecting" && (
             <div className="connection-banner">
               <Radio className="pulse" size={16} /> Restoring your connection.
@@ -805,46 +858,18 @@ export function App() {
         </Modal>
       )}
       {help && (
-        <Modal title="FLIGHT MANUAL" onClose={() => setHelp(false)}>
+        <Modal
+          title="HOW TO PLAY"
+          className="manual-modal"
+          onClose={() => {
+            setHelp(false);
+            setPendingJoin(false);
+          }}
+        >
           <h2 className="manual-title">
-            One swarm.
-            <br />
-            <span>Endless possibilities.</span>
+            One swarm. <span>Four simple moves.</span>
           </h2>
-          <div className="manual-steps">
-            <div>
-              <span>01</span>
-              <p>
-                <strong>Gather your light.</strong> Every star produces
-                particles automatically. Tap a friendly star, drag a selection
-                box, or select your whole swarm.
-              </p>
-            </div>
-            <div>
-              <span>02</span>
-              <p>
-                <strong>Send it anywhere.</strong> Click or tap a destination.
-                Opposing particles destroy each other one for one—even in open
-                space.
-              </p>
-            </div>
-            <div>
-              <span>03</span>
-              <p>
-                <strong>Make stars yours.</strong> Send enough particles to
-                overcome a star’s defense. Its remaining capture cost appears
-                below it.
-              </p>
-            </div>
-            <div>
-              <span>04</span>
-              <p>
-                <strong>Feed your stars.</strong> Send particles into a friendly
-                star with empty rings. Each new ring increases production.
-                Evolution costs 60, then 120 particles.
-              </p>
-            </div>
-          </div>
+          <HowToPlay />
           <div className="manual-controls">
             <span>
               <kbd>A</kbd> Select all
@@ -865,8 +890,37 @@ export function App() {
             you send units out. Worlds reset after their last explorer leaves
             and the reconnect window closes.
           </p>
-          <button className="join-button" onClick={() => setHelp(false)}>
-            <span>Let there be light</span>
+          <p className="manual-note server-note">
+            The game runs on the server. Bots join as separate players and are
+            marked BOT in the Players list. The background on the start screen
+            is a local demo.
+          </p>
+          <label className="skip-help">
+            <input
+              type="checkbox"
+              checked={skipHelp}
+              onChange={(e) => {
+                setSkipHelp(e.target.checked);
+                localStorage.setItem(
+                  "solstice-skip-help",
+                  String(e.target.checked),
+                );
+              }}
+            />
+            Don’t show this again
+          </label>
+          <button
+            className="join-button"
+            onClick={() => {
+              localStorage.setItem("solstice-help-seen", "true");
+              setHelp(false);
+              if (pendingJoin) {
+                setPendingJoin(false);
+                join();
+              }
+            }}
+          >
+            <span>{pendingJoin ? "Start playing" : "Got it"}</span>
             <Check size={18} />
           </button>
         </Modal>

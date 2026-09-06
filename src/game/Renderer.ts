@@ -24,7 +24,6 @@ import {
   type Viewport,
 } from "../../shared/types";
 import { Soundscape } from "./Audio";
-
 type RenderUnit = Pick<Unit, "id" | "owner" | "x" | "y" | "moving"> & {
   px: number;
   py: number;
@@ -39,6 +38,7 @@ interface Callbacks {
   view: (view: Viewport) => void;
   hover: (star?: Star) => void;
   fps: (fps: number) => void;
+  feedback: (message: string) => void;
 }
 export class GalaxyRenderer {
   readonly audio = new Soundscape();
@@ -142,10 +142,10 @@ export class GalaxyRenderer {
       depthWrite: false,
     });
     const bg = new THREE.Mesh(
-      new THREE.PlaneGeometry(18000, 18000),
+      new THREE.PlaneGeometry(WORLD_SIZE * 4, WORLD_SIZE * 4),
       this.bgMaterial,
     );
-    bg.position.set(3400, -3400, -200);
+    bg.position.set(WORLD_SIZE / 2, -WORLD_SIZE / 2, -200);
     this.scene.add(bg);
     this.makeStarfield();
     const plane = new THREE.PlaneGeometry(1, 1);
@@ -200,9 +200,9 @@ export class GalaxyRenderer {
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(800, 600),
-      0.7,
-      0.65,
-      0.65,
+      0.28,
+      0.35,
+      0.9,
     );
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
@@ -260,27 +260,43 @@ export class GalaxyRenderer {
       this.hoverStar = world.stars[this.hoverStar.id];
       this.callbacks.hover(this.hoverStar);
     }
-    const centers = new Float32Array(world.stars.length * 3),
-      colors = new Float32Array(world.stars.length * 3),
-      params = new Float32Array(world.stars.length * 2);
+    // Three caches the first instanced buffer capacity. Dispose when switching
+    // from the 10-star menu to a full room so live stars are not silently culled.
+    const changed =
+      this.starGeo.getAttribute("center")?.count !== world.stars.length;
+    if (changed) this.starGeo.dispose();
+    const centers = changed
+        ? new Float32Array(world.stars.length * 3)
+        : (this.starGeo.getAttribute("center").array as Float32Array),
+      colors = changed
+        ? new Float32Array(world.stars.length * 3)
+        : (this.starGeo.getAttribute("tint").array as Float32Array),
+      params = changed
+        ? new Float32Array(world.stars.length * 2)
+        : (this.starGeo.getAttribute("params").array as Float32Array);
     world.stars.forEach((s, i) => {
       centers.set([s.x, -s.y, 0], i * 3);
       const c = this.color(s.owner);
       colors.set([c.r, c.g, c.b], i * 3);
       params.set([radius(s), s.owner ? s.id + 1 : 0], i * 2);
     });
-    this.starGeo.setAttribute(
-      "center",
-      new THREE.InstancedBufferAttribute(centers, 3),
-    );
-    this.starGeo.setAttribute(
-      "tint",
-      new THREE.InstancedBufferAttribute(colors, 3),
-    );
-    this.starGeo.setAttribute(
-      "params",
-      new THREE.InstancedBufferAttribute(params, 2),
-    );
+    if (changed) {
+      this.starGeo.setAttribute(
+        "center",
+        new THREE.InstancedBufferAttribute(centers, 3),
+      );
+      this.starGeo.setAttribute(
+        "tint",
+        new THREE.InstancedBufferAttribute(colors, 3),
+      );
+      this.starGeo.setAttribute(
+        "params",
+        new THREE.InstancedBufferAttribute(params, 2),
+      );
+    } else {
+      for (const name of ["center", "tint", "params"])
+        this.starGeo.getAttribute(name).needsUpdate = true;
+    }
     this.starGeo.instanceCount = world.stars.length;
   }
   setUnits(list: Pick<Unit, "id" | "owner" | "x" | "y" | "moving">[]) {
@@ -322,7 +338,7 @@ export class GalaxyRenderer {
     this.playing = true;
     this.clearSelection();
     const s = this.world.stars[home];
-    if (s) this.focus(s.x, s.y, this.width < 700 ? 1300 : 1150);
+    if (s) this.focus(s.x, s.y, this.width < 700 ? 1700 : 1550);
   }
   focus(x: number, y: number, height?: number) {
     this.targetX = clamp(x, 0, WORLD_SIZE);
@@ -335,10 +351,20 @@ export class GalaxyRenderer {
       this.world.stars.find(
         (s) => s.id === p?.home && s.owner === this.player,
       ) ?? this.world.stars.find((s) => s.owner === this.player);
-    if (s) this.focus(s.x, s.y, 1150);
+    if (s) this.focus(s.x, s.y, this.width < 700 ? 1700 : 1550);
+    else {
+      const units = [...this.units.values()].filter(
+        (u) => u.owner === this.player,
+      );
+      if (units.length) this.focus(units[0].x, units[0].y, 1550);
+    }
   }
   zoom(factor: number) {
-    this.targetHeight = clamp(this.targetHeight * factor, 430, 7900);
+    this.targetHeight = clamp(
+      this.targetHeight * factor,
+      430,
+      WORLD_SIZE * 1.15,
+    );
   }
   setQuality(high: boolean) {
     this.bloom.enabled = high && !this.reducedMotion;
@@ -477,21 +503,22 @@ export class GalaxyRenderer {
         continue;
       const c = this.color(u.owner),
         selected = this.selected.has(u.id);
-      add(x, y, c, selected ? 2.5 : 1.2, selected ? 9 : 7);
+      add(x, y, c, selected ? 1.05 : 0.78, selected ? 6 : 4.5);
       if (u.moving && !this.reducedMotion) {
         const dx = u.x - u.px,
           dy = u.y - u.py;
-        for (let i = 1; i <= 3; i++)
-          add(x - dx * i * 0.35, y - dy * i * 0.35, c, 0.35 / i, 5 - i * 0.5);
+        for (let i = 1; i <= 2; i++)
+          add(x - dx * i * 0.3, y - dy * i * 0.3, c, 0.16 / i, 3 - i * 0.5);
       }
     }
     for (const e of this.ripples) {
       const age = (now - e.born) / 1000,
         capture = e.kind !== "clash";
-      const life = capture ? 2.1 : 0.55;
+      if (capture) continue; // Commands and upgrades must not resemble an extra swarm.
+      const life = 0.3;
       if (age > life) continue;
       const color = this.color(e.owner),
-        n = capture ? 65 : 7;
+        n = 3;
       for (let i = 0; i < n; i++) {
         const a = i * 2.399963 + e.x;
         const speed = 16 + (i % 9) * (capture ? 17 : 10),
@@ -500,8 +527,8 @@ export class GalaxyRenderer {
           e.x + Math.cos(a) * r,
           e.y + Math.sin(a) * r,
           color,
-          (1 - age / life) * 2,
-          capture ? 7 : 5,
+          (1 - age / life) * 0.6,
+          3,
         );
       }
     }
@@ -571,40 +598,36 @@ export class GalaxyRenderer {
       c.globalAlpha = 1;
       const labelY = p.y + r + 35;
       const unobscured = this.playing
-        ? labelY > (this.width < 600 ? 235 : 85) &&
+        ? labelY > (this.width < 600 ? 245 : 120) &&
           labelY < this.height - 105 &&
           !(
             this.width >= 600 &&
-            p.y < 340 &&
-            (p.x < 275 || p.x > this.width - 245)
+            ((p.y < 430 && p.x < 285) || (p.y < 530 && p.x > this.width - 300))
           )
         : this.width < 600
           ? labelY < this.height * 0.35
           : p.x > this.width * 0.43 && labelY < this.height - 150;
       if (scale > 0.28 && unobscured) {
         c.textAlign = "center";
-        c.font = `${own ? 500 : 400} ${clamp(12 * scale + 5, 11, 14)}px 'Space Grotesk', sans-serif`;
-        c.fillStyle = own ? "#f4debd" : s.owner ? col : "#6f8294";
-        c.fillText(s.name.toUpperCase(), p.x, p.y + r + 35);
-        c.font = '10px "IBM Plex Mono", monospace';
-        c.fillStyle = s.owner ? "#a0acbb" : "#526779";
-        if (!s.owner)
-          c.fillText(`${Math.ceil(s.hp)} TO CAPTURE`, p.x, p.y + r + 51);
-        else if (own) {
-          const n = this.starCounts.get(s.id) ?? 0;
-          c.fillText(
-            `${n}  ·  +${(s.level * 1.7).toFixed(1)}/s`,
-            p.x,
-            p.y + r + 51,
-          );
-        } else {
-          const owner = this.world.players.find((o) => o.id === s.owner);
-          c.fillText(
-            `${owner?.name ?? "ABANDONED"}${owner?.bot ? " · AI" : ""}`,
-            p.x,
-            p.y + r + 51,
-          );
-        }
+        c.font = '600 15px "IBM Plex Mono", monospace';
+        const main = own
+          ? `${this.starCounts.get(s.id) ?? 0}`
+          : `${Math.ceil(s.hp)}`;
+        const detail = own
+          ? `+${(s.level * 1.7).toFixed(1)}/s · Lv ${s.level}/${s.maxLevel}`
+          : s.owner
+            ? "DEFENSE"
+            : "TO CAPTURE";
+        const width = Math.max(c.measureText(main).width + 22, own ? 142 : 96);
+        c.fillStyle = "rgba(3, 10, 18, .88)";
+        c.beginPath();
+        c.roundRect(p.x - width / 2, labelY - 17, width, 43, 5);
+        c.fill();
+        c.fillStyle = own ? "#ffe1b0" : s.owner ? col : "#c3d5e4";
+        c.fillText(main, p.x, labelY);
+        c.font = '11px "IBM Plex Mono", monospace';
+        c.fillStyle = "#b6c7d5";
+        c.fillText(detail, p.x, labelY + 18);
         if (s.owner && s.hp < s.maxHp - 2) {
           c.fillStyle = "#152230";
           c.fillRect(p.x - 18, p.y - r - 13, 36, 2);
@@ -614,26 +637,21 @@ export class GalaxyRenderer {
       }
     }
     for (const e of this.ripples) {
-      const age = (now - e.born) / 1000,
-        capture = e.kind !== "clash";
-      if (!capture || age > 2.5) continue;
+      const age = (now - e.born) / 1000;
+      if (e.kind === "clash" || age > 0.8) continue;
       const p = this.toScreen(e);
       c.strokeStyle = factionColor(e.owner);
-      c.globalAlpha = Math.max(0, (1 - age / 2.5) * 0.7);
-      c.lineWidth = 1;
+      c.globalAlpha = Math.max(0, (1 - age / 0.8) * 0.5);
+      c.lineWidth = 1.5;
       c.beginPath();
-      c.arc(p.x, p.y, (30 + age * 140) * scale, 0, Math.PI * 2);
+      c.arc(
+        p.x,
+        p.y,
+        (e.kind === "order" ? 10 + age * 18 : 38 + age * 22) * scale,
+        0,
+        Math.PI * 2,
+      );
       c.stroke();
-      if (e.kind !== "order") {
-        c.font = '11px "IBM Plex Mono", monospace';
-        c.textAlign = "center";
-        c.fillStyle = factionColor(e.owner);
-        c.fillText(
-          e.kind === "capture" ? "STAR CAPTURED" : "STAR EVOLVED",
-          p.x,
-          p.y - 60 * scale - age * 18,
-        );
-      }
     }
     c.globalAlpha = 1;
     this.ripples = this.ripples.filter((e) => now - e.born < 2600);
@@ -757,6 +775,18 @@ export class GalaxyRenderer {
         to: target,
         born: performance.now(),
       });
+    const owner = this.world.players.find((p) => p.id === star?.owner);
+    this.callbacks.feedback(
+      star
+        ? star.owner === this.player
+          ? star.level < star.maxLevel
+            ? `Upgrade ordered · ${count} units sent · ${upgradeCost(star) - star.upgrade} needed. These units are spent on production.`
+            : `Reinforcing your star · ${count} units. Max level ${star.maxLevel}; units stay to defend.`
+          : star.shield > this.world.time
+            ? `Attack blocked · ${owner?.name ?? "Opponent"} is protected for ${Math.ceil(star.shield - this.world.time)}s.`
+            : `Attacking ${owner?.name ?? "neutral star"} · ${count} units sent · ${Math.ceil(star.hp)} star defense, plus nearby enemy units.`
+        : `Moving ${count} units`,
+    );
     this.callbacks.order({
       ids: [...this.selected],
       x: target.x,
@@ -823,7 +853,7 @@ export class GalaxyRenderer {
             this.targetHeight = clamp(
               (this.targetHeight * this.pinch) / d,
               430,
-              7900,
+              WORLD_SIZE * 1.15,
             );
           this.pinch = d;
           return;
@@ -889,6 +919,8 @@ export class GalaxyRenderer {
         }
         if (d.moved) return;
         const s = this.starAt(p);
+        this.hoverStar = s;
+        this.callbacks.hover(s);
         if (s?.owner === this.player && (!this.selected.size || e.shiftKey))
           this.selectNear(s, e.shiftKey);
         else if (this.selected.size) this.issue(p, s);
@@ -921,7 +953,11 @@ export class GalaxyRenderer {
         const p = { x: e.clientX, y: e.clientY };
         const before = this.toWorld(p);
         const factor = Math.exp(clamp(e.deltaY, -150, 150) * 0.0018);
-        this.targetHeight = clamp(this.targetHeight * factor, 430, 7900);
+        this.targetHeight = clamp(
+          this.targetHeight * factor,
+          430,
+          WORLD_SIZE * 1.15,
+        );
         if (this.playing) {
           this.targetX = clamp(
             before.x + (this.targetX - before.x) * factor,

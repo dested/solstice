@@ -51,6 +51,8 @@ const NAMES = [
   "Saiph",
   "Celaeno",
 ];
+const INTEREST_AXIS = Math.floor(WORLD_SIZE / 400) + 1;
+
 export class Simulation {
   stars: Star[] = [];
   players = new Map<number, Player>();
@@ -67,9 +69,9 @@ export class Simulation {
     this.rng = seed >>> 0;
     for (let row = 0; row < 19; row++)
       for (let col = 0; col < 19; col++) {
-        const x = 300 + col * 344 + (this.random() - 0.5) * 130;
-        const y = 300 + row * 344 + (this.random() - 0.5) * 130;
-        if (Math.hypot(x - 3400, y - 3400) > 3200) continue;
+        const x = 600 + col * 688 + (this.random() - 0.5) * 260;
+        const y = 600 + row * 688 + (this.random() - 0.5) * 260;
+        if (Math.hypot(x - WORLD_SIZE / 2, y - WORLD_SIZE / 2) > 6400) continue;
         const id = this.stars.length;
         const maxLevel = this.random() < 0.2 ? 3 : this.random() < 0.55 ? 2 : 1;
         this.stars.push({
@@ -132,14 +134,14 @@ export class Simulation {
     let score = -Infinity;
     for (const s of this.stars) {
       if (s.owner) continue;
-      let nearest = 2200;
+      let nearest = 4400;
       for (const e of hostile)
         nearest = Math.min(nearest, Math.sqrt(distanceSq(s, e)));
       let danger = 0;
       for (const u of this.units.values())
         if (u.owner !== p.id && distanceSq(s, u) < 300 ** 2) danger++;
       const value =
-        (nearest < 650 ? nearest - 1700 : -Math.abs(nearest - 1100) * 0.25) -
+        (nearest < 1300 ? nearest - 3400 : -Math.abs(nearest - 2200) * 0.25) -
         danger * 25 +
         this.random() * 120;
       if (value > score) {
@@ -301,6 +303,7 @@ export class Simulation {
                 owner: u.owner,
                 other: old,
                 star: s.name,
+                starId: s.id,
               });
             }
           } else if (s && s.level < s.maxLevel) {
@@ -317,6 +320,8 @@ export class Simulation {
                 y: s.y,
                 owner: u.owner,
                 star: s.name,
+                starId: s.id,
+                level: s.level,
               });
             }
           } else {
@@ -364,7 +369,9 @@ export class Simulation {
       let hit: Unit | undefined;
       for (let ox = -1; ox <= 1 && !hit; ox++)
         for (let oy = -1; oy <= 1 && !hit; oy++) {
-          const near = grid.get(gx + ox + (gy + oy) * 512);
+          const near = grid.get(
+            gx + ox + (gy + oy) * (Math.ceil(WORLD_SIZE / 16) + 2),
+          );
           if (!near || near.owner === u.owner) continue;
           for (const e of near.units)
             if (
@@ -403,7 +410,7 @@ export class Simulation {
             other: hit.owner,
           });
       } else {
-        const key = gx + gy * 512;
+        const key = gx + gy * (Math.ceil(WORLD_SIZE / 16) + 2);
         const bucket = grid.get(key);
         if (bucket) {
           bucket.units.push(u);
@@ -493,7 +500,7 @@ export class Simulation {
       const owned = owners.get(u.owner);
       if (owned) owned.push(u);
       else owners.set(u.owner, [u]);
-      const key = Math.floor(u.x / 400) + Math.floor(u.y / 400) * 32;
+      const key = Math.floor(u.x / 400) + Math.floor(u.y / 400) * INTEREST_AXIS;
       const cell = cells.get(key);
       if (cell) cell.push(u);
       else cells.set(key, [u]);
@@ -511,18 +518,26 @@ export class Simulation {
     const left = clamp(
         Math.floor((view.x - view.width / 2 - 180) / 400),
         0,
-        17,
+        INTEREST_AXIS - 1,
       ),
-      right = clamp(Math.floor((view.x + view.width / 2 + 180) / 400), 0, 17);
+      right = clamp(
+        Math.floor((view.x + view.width / 2 + 180) / 400),
+        0,
+        INTEREST_AXIS - 1,
+      );
     const top = clamp(
         Math.floor((view.y - view.height / 2 - 180) / 400),
         0,
-        17,
+        INTEREST_AXIS - 1,
       ),
-      bottom = clamp(Math.floor((view.y + view.height / 2 + 180) / 400), 0, 17);
+      bottom = clamp(
+        Math.floor((view.y + view.height / 2 + 180) / 400),
+        0,
+        INTEREST_AXIS - 1,
+      );
     for (let x = left; x <= right; x++)
       for (let y = top; y <= bottom; y++)
-        for (const u of index.cells.get(x + y * 32) ?? []) {
+        for (const u of index.cells.get(x + y * INTEREST_AXIS) ?? []) {
           if (
             u.owner !== owner &&
             Math.abs(u.x - view.x) < view.width / 2 + 180 &&

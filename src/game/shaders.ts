@@ -29,14 +29,14 @@ attribute vec3 tint;attribute float size;varying vec3 vColor;uniform float scale
 void main(){vColor=tint;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_PointSize=clamp(size*scale,1.5,18.);}`;
 export const particleFragment = `
 varying vec3 vColor;
-void main(){float r=length(gl_PointCoord-.5)*2.;float core=exp(-r*r*12.);float glow=exp(-r*r*3.)*.28;gl_FragColor=vec4(vColor*(core*1.7+glow),1.);}`;
+void main(){float r=length(gl_PointCoord-.5)*2.;float core=exp(-r*r*12.);float glow=exp(-r*r*3.)*.28;gl_FragColor=vec4(vColor*(core*1.05+glow*.35),1.);}`;
 export const backgroundFragment = `
 uniform float time;varying vec2 vUv;
 ${noise}
 void main(){vec2 p=vUv*7.;float t=time*.003;
 float a=fbm(p+vec2(t,0.));float b=fbm(p*2.+a*2.5);float clouds=pow(max(0.,b),3.);
 float band=exp(-pow((p.y-p.x*.42-1.9+sin(p.x*.6)*.6)*1.4,2.));
-vec3 col=vec3(.0012,.0025,.006)+vec3(.007,.018,.035)*clouds*band*2.;
-col+=vec3(.028,.009,.045)*pow(a,3.)*(1.-band)*.6;
-col+=vec3(.009,.04,.06)*pow(fbm(p*3.+b*3.),4.)*band;
+vec3 col=vec3(.0012,.0025,.006)+vec3(.003,.006,.011)*clouds;
+col+=vec3(.028,.009,.045)*pow(a,3.)*.15;
+col+=vec3(.009,.04,.06)*pow(fbm(p*3.+b*3.),4.)*.12;
 gl_FragColor=vec4(col,1.);}`;

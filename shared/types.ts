@@ -1,4 +1,5 @@
-export const WORLD_SIZE = 6800;
+export const WORLD_SIZE = 13600;
+export const MAP_SPACING = 2;
 export const MAX_PLAYERS = 64;
 export const UNIT_CAP = 1600;
 export const START_UNITS = 100;
@@ -67,6 +68,8 @@ export interface WorldEvent {
   owner: number;
   other?: number;
   star?: string;
+  starId?: number;
+  level?: number;
 }
 export interface WorldMeta {
   time: number;

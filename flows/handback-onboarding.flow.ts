@@ -1,0 +1,31 @@
+import { flow } from "bx/flow";
+
+export default flow("Handback onboarding and player navigation", async b => {
+  await b.open("http://localhost:5173");
+  await b.js('(() => {localStorage.removeItem("solstice-help-seen"); localStorage.removeItem("solstice-skip-help"); sessionStorage.removeItem("solstice-reconnection")})()');
+  await b.open("http://localhost:5173");
+  await b.fill("Your callsign", "Handback QA");
+  await b.click("Join the universe");
+  await b.expectVisible(".manual-modal");
+  if (await b.js('document.querySelectorAll(".manual-diagram").length') !== "4") throw new Error("Expected four gameplay illustrations");
+  await b.snap("artifacts/handback-guide.png");
+  await b.click("Start playing");
+  await b.drive("void 0", "window.__solsticeDebug?.player > 0", {timeoutMs:10000});
+  await b.expectText("PLAYERS");
+  await b.expectVisible('[data-testid="your-player-row"]');
+  if (!(await b.text('[data-testid="your-player-row"]')).includes("Handback QA")) throw new Error("Your row is missing");
+  await b.click("View whole galaxy");
+  await b.sleep(700);
+  await b.snap("artifacts/handback-galaxy.png");
+  await b.click("Home (F)");
+  await b.sleep(800);
+  await b.drive("void 0", "(() => {const d=window.__solsticeDebug,p=d.world.players.find(p=>p.id===d.player),h=d.world.stars[p.home]; return Math.hypot(d.view.x-h.x,d.view.y-h.y)<10})()", {timeoutMs:3000});
+  await b.snap("artifacts/handback-home.png");
+  await b.open("http://localhost:5173");
+  await b.click("Join the universe");
+  await b.expectNotVisible(".manual-modal");
+  await b.drive("void 0", "window.__solsticeDebug?.player > 0", {timeoutMs:10000});
+  await b.click("Settings");
+  await b.click("Leave this universe");
+  await b.click("Leave universe");
+});
